@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 
+- Constructor provenance on `PriorSpec` and complete resolved-prior metadata in
+  fit artifacts, including explicit/default DL inputs and Minnesota precisions.
 - Standalone component calibration, revision-specific local benchmark and empirical
   multi-chain diagnostic scripts, with source manifests and retained failure evidence.
 
@@ -27,6 +29,11 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Changed
 
+- Fit artifact writers now emit version 2; forecasts remain version 1.
+  `load_run_dir` restores the saved prior instead of re-estimating it from config.
+  Older files without a saved prior remain readable through `load_fit_npz`, but
+  full run reconstruction now rejects them. Regenerate with a verified prior to
+  migrate. This persistence change does not alter sampler transitions or defaults.
 - Document the dimension-dependent DL residual-variance default and the missing
   dependent-variable scaling of legacy Minnesota coefficient covariances in triangular
   SV. Prior repairs remain separate from the approved component transitions; this

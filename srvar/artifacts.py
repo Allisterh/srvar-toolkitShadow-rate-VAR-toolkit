@@ -17,10 +17,13 @@ import numpy as np
 import pandas as pd
 from numpy.lib.npyio import NpzFile
 
+from ._prior_io import prior_from_json, prior_to_json
 from .data.dataset import Dataset
 from .results import FitResult, ForecastResult, PosteriorNIW
+from .spec import PriorSpec
 
 _FORMAT_VERSION = 1
+_FIT_FORMAT_VERSION = 2
 _FORMAT_VERSION_KEY = "format_version"
 _ARTIFACT_KIND_KEY = "artifact_kind"
 _REAL_NUMERIC_KINDS = {"i", "u", "f"}
@@ -222,7 +225,10 @@ def _validate_marker(npz: NpzFile, path: Path, *, expected_kind: str) -> None:
         raise _artifact_format_error(
             path, "format_version must be a zero-dimensional signed or unsigned integer"
         )
-    if format_version.item() != _FORMAT_VERSION:
+    supported = (
+        {_FORMAT_VERSION, _FIT_FORMAT_VERSION} if expected_kind == "fit" else {_FORMAT_VERSION}
+    )
+    if format_version.item() not in supported:
         raise _artifact_format_error(path, "unsupported format_version")
 
     artifact_kind = _load_npz_array(npz, _ARTIFACT_KIND_KEY, path)
@@ -262,18 +268,19 @@ def _validate_unique_time_index(time_index: np.ndarray, path: Path) -> None:
         raise _schema_error(path, "time_index", "must not contain duplicate timestamps")
 
 
-def _validate_v1_field_set(
+def _validate_field_set(
     npz: NpzFile,
     path: Path,
     *,
     required_fields: frozenset[str],
     optional_fields: frozenset[str],
+    version: int,
 ) -> set[str]:
     fields = set(npz.files)
     if required_fields - fields:
-        raise _artifact_format_error(path, "missing required v1 field")
+        raise _artifact_format_error(path, f"missing required v{version} field")
     if fields - required_fields - optional_fields:
-        raise _artifact_format_error(path, "unknown v1 field")
+        raise _artifact_format_error(path, f"unknown v{version} field")
     return fields
 
 
@@ -285,14 +292,19 @@ def _load_v1_arrays(npz: NpzFile, path: Path, fields: set[str]) -> dict[str, np.
     }
 
 
-def _validate_fit_v1_payload(npz: NpzFile, path: Path) -> dict[str, np.ndarray]:
-    fields = _validate_v1_field_set(
+def _validate_fit_payload(npz: NpzFile, path: Path) -> dict[str, np.ndarray]:
+    version = int(_load_npz_array(npz, _FORMAT_VERSION_KEY, path))
+    required = _FIT_REQUIRED_FIELDS | ({"prior_json"} if version == _FIT_FORMAT_VERSION else set())
+    fields = _validate_field_set(
         npz,
         path,
-        required_fields=_FIT_REQUIRED_FIELDS,
+        required_fields=required,
         optional_fields=_FIT_OPTIONAL_FIELDS,
+        version=version,
     )
     arrays = _load_v1_arrays(npz, path, fields)
+    if "prior_json" in arrays:
+        _require_dtype_rank(arrays["prior_json"], path, "prior_json", dtype_kinds={"U"}, ndim=0)
 
     variables = arrays["variables"]
     _require_dtype_rank(variables, path, "variables", dtype_kinds={"U"}, ndim=1)
@@ -567,11 +579,12 @@ def _open_artifact_npz(
 def save_fit_npz(path: str | Path, fit_res: FitResult) -> None:
     p = Path(path)
     payload: dict[str, Any] = {
-        _FORMAT_VERSION_KEY: np.asarray(_FORMAT_VERSION, dtype=np.int64),
+        _FORMAT_VERSION_KEY: np.asarray(_FIT_FORMAT_VERSION, dtype=np.int64),
         _ARTIFACT_KIND_KEY: np.asarray("fit", dtype=str),
         "variables": np.asarray(fit_res.dataset.variables, dtype=str),
         "time_index": np.asarray(fit_res.dataset.time_index.to_numpy(), dtype="datetime64[ns]"),
         "values": fit_res.dataset.values,
+        "prior_json": np.asarray(prior_to_json(fit_res.prior), dtype=str),
     }
     _add_optional(payload, "beta_draws", fit_res.beta_draws)
     _add_optional(payload, "sigma_draws", fit_res.sigma_draws)
@@ -655,9 +668,18 @@ class FitNPZ:
     gamma_draws: np.ndarray | None
     mu_draws: np.ndarray | None
     mu_gamma_draws: np.ndarray | None
+    prior: PriorSpec | None = None
 
 
-def _fit_npz_from_v1_payload(payload: dict[str, np.ndarray]) -> FitNPZ:
+def _fit_npz_from_payload(payload: dict[str, np.ndarray]) -> FitNPZ:
+    prior = prior_from_json(str(payload["prior_json"].item())) if "prior_json" in payload else None
+    if prior is not None:
+        k, n = prior.niw.m0.shape
+        if n != len(payload["variables"]) or any(
+            name in payload and payload[name].shape[-2:] != (k, n)
+            for name in ("beta_draws", "posterior_mn")
+        ):
+            raise ValueError("saved prior has incompatible coefficient or equation dimensions")
     variables = [str(value) for value in payload["variables"].tolist()]
     time_index = pd.DatetimeIndex(pd.to_datetime(payload["time_index"]))
     values = np.asarray(payload["values"], dtype=float)
@@ -683,6 +705,7 @@ def _fit_npz_from_v1_payload(payload: dict[str, np.ndarray]) -> FitNPZ:
 
     return FitNPZ(
         dataset=ds,
+        prior=prior,
         posterior=posterior,
         beta_draws=payload.get("beta_draws"),
         sigma_draws=payload.get("sigma_draws"),
@@ -730,7 +753,7 @@ def load_fit_npz(
         limits=limits,
     ) as (npz, is_v1):
         if is_v1:
-            return _fit_npz_from_v1_payload(_validate_fit_v1_payload(npz, p))
+            return _fit_npz_from_payload(_validate_fit_payload(npz, p))
 
         variables = [
             str(v) for v in np.asarray(_load_npz_array(npz, "variables", p), dtype=str).tolist()
@@ -880,8 +903,8 @@ def load_run_dir(
     This function:
 
     1) Loads the stored draws/state from ``fit_result.npz``.
-    2) Reconstructs ``ModelSpec``, ``PriorSpec``, and ``SamplerConfig`` from the saved
-       ``config.yml`` (without re-loading the original CSV).
+    2) Restores the exact saved ``PriorSpec`` and reconstructs ``ModelSpec`` and
+       ``SamplerConfig`` from ``config.yml`` without re-loading the original CSV.
 
     Notes
     -----
@@ -891,6 +914,10 @@ def load_run_dir(
     - Set ``allow_legacy_pickle=True`` only for a trusted pre-migration artifact; it may execute
       pickle code.
     - ``limits`` controls metadata limits for the stored fit artifact. ``None`` uses the defaults.
+    - A version-2 fit with a saved prior is required. Older raw draws can still be
+      inspected with :func:`load_fit_npz`, but their prior is not inferred.
+    - The saved prior is authoritative; the configuration's prior section is not
+      re-evaluated using current constructor defaults or the saved dataset.
     """
     out = Path(out_dir)
     cfg_path = out / str(config_filename)
@@ -901,7 +928,7 @@ def load_run_dir(
     if not fit_path.exists():
         raise FileNotFoundError(f"run directory is missing fit artifact: {fit_path}")
 
-    from .config import build_model, build_prior, build_sampler, load_config
+    from .config import build_model, build_sampler, load_config
 
     cfg = load_config(cfg_path)
     resolved_limits = _resolve_load_limits(limits)
@@ -911,9 +938,17 @@ def load_run_dir(
         limits=resolved_limits,
     )
 
+    if fit_npz.prior is None:
+        raise ValueError(
+            "run has no saved prior; use load_fit_npz for raw draws or regenerate the run "
+            "with an explicitly verified prior"
+        )
     ds = fit_npz.dataset
     model = build_model(cfg, dataset=ds)
-    prior = build_prior(cfg, dataset=ds, model=model)
+    prior = fit_npz.prior
+    expected_k = int(model.include_intercept) + model.p * ds.N
+    if prior.niw.m0.shape != (expected_k, ds.N):
+        raise ValueError("saved prior dimensions do not match the configured model")
     sampler, _rng = build_sampler(cfg)
 
     return FitResult(

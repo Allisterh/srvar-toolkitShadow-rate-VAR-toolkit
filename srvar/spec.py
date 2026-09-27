@@ -475,6 +475,12 @@ class PriorSpec:
         matrix-normal path. ``mode="canonical"`` is the exact canonical
         construction; ``mode="tempered"`` is the experimental bridge between the
         legacy and canonical variance maps.
+    method:
+        Declared constructor provenance. Directly built priors default to ``custom``;
+        this label does not change the numerical target.
+    residual_prior:
+        DL input provenance: ``legacy_default`` or ``explicit``. The resolved IG
+        parameters remain in ``niw``. ``None`` means no mode was declared.
     """
 
     family: str
@@ -483,6 +489,32 @@ class PriorSpec:
     blasso: BLassoSpec | None = None
     dl: DLSpec | None = None
     minnesota_canonical: MinnesotaCanonicalSpec | None = None
+    method: str = "custom"
+    residual_prior: str | None = None
+
+    def __post_init__(self) -> None:
+        families = {
+            "niw_default": "niw",
+            "minnesota_legacy": "niw",
+            "minnesota_canonical": "niw",
+            "minnesota_tempered": "niw",
+            "ssvs": "ssvs",
+            "blasso": "blasso",
+            "dl": "dl",
+        }
+        if self.method != "custom":
+            if self.method not in families or self.family.lower() != families[self.method]:
+                raise ValueError("prior method is unknown or inconsistent with family")
+            mode = self.method.removeprefix("minnesota_")
+            if mode in {"canonical", "tempered"}:
+                if self.minnesota_canonical is None or self.minnesota_canonical.mode != mode:
+                    raise ValueError("prior method requires matching Minnesota metadata")
+            elif self.minnesota_canonical is not None:
+                raise ValueError("prior method conflicts with Minnesota metadata")
+        if self.residual_prior is not None and (
+            self.family.lower() != "dl" or self.residual_prior not in {"legacy_default", "explicit"}
+        ):
+            raise ValueError("residual_prior must describe an existing DL residual prior")
 
     @staticmethod
     def niw_default(*, k: int, n: int) -> PriorSpec:
@@ -502,7 +534,9 @@ class PriorSpec:
         v0 = 10.0 * np.eye(k, dtype=float)
         s0 = np.eye(n, dtype=float)
         nu0 = float(n + 2)
-        return PriorSpec(family="niw", niw=NIWPrior(m0=m0, v0=v0, s0=s0, nu0=nu0))
+        return PriorSpec(
+            family="niw", niw=NIWPrior(m0=m0, v0=v0, s0=s0, nu0=nu0), method="niw_default"
+        )
 
     @staticmethod
     def niw_minnesota(
@@ -635,7 +669,9 @@ class PriorSpec:
 
         s0 = np.diag(sigma2)
         nu0 = float(n + 2)
-        return PriorSpec(family="niw", niw=NIWPrior(m0=m0, v0=v0, s0=s0, nu0=nu0))
+        return PriorSpec(
+            family="niw", niw=NIWPrior(m0=m0, v0=v0, s0=s0, nu0=nu0), method="minnesota_legacy"
+        )
 
     @staticmethod
     def niw_minnesota_canonical(
@@ -718,6 +754,7 @@ class PriorSpec:
             family="niw",
             niw=niw,
             minnesota_canonical=canonical,
+            method="minnesota_canonical",
         )
 
     @staticmethod
@@ -813,6 +850,7 @@ class PriorSpec:
             family="niw",
             niw=niw,
             minnesota_canonical=tempered,
+            method="minnesota_tempered",
         )
 
     @staticmethod
@@ -884,7 +922,7 @@ class PriorSpec:
             intercept_slab_var=None if intercept_slab_var is None else float(intercept_slab_var),
             fix_intercept=bool(fix_intercept and include_intercept),
         )
-        return PriorSpec(family="ssvs", niw=niw, ssvs=spec)
+        return PriorSpec(family="ssvs", niw=niw, ssvs=spec, method="ssvs")
 
     @staticmethod
     def from_blasso(
@@ -945,7 +983,7 @@ class PriorSpec:
             lambda_init=float(lambda_init),
         )
         _ = bool(include_intercept)
-        return PriorSpec(family="blasso", niw=niw, blasso=spec)
+        return PriorSpec(family="blasso", niw=niw, blasso=spec, method="blasso")
 
     @staticmethod
     def from_dl(
@@ -989,7 +1027,13 @@ class PriorSpec:
         )
         spec = DLSpec(abeta=float(abeta), dl_scaler=float(dl_scaler))
         _ = bool(include_intercept)
-        return PriorSpec(family="dl", niw=niw, dl=spec)
+        return PriorSpec(
+            family="dl",
+            niw=niw,
+            dl=spec,
+            method="dl",
+            residual_prior="legacy_default" if s0 is None and nu0 is None else "explicit",
+        )
 
 
 @dataclass(frozen=True, slots=True)

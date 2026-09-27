@@ -17,7 +17,7 @@ def _assert_safe_npz(path: Path, *, artifact_kind: str) -> None:
         assert "allow_pickle" not in npz
         assert npz["format_version"].shape == ()
         assert npz["format_version"].dtype.kind in {"i", "u"}
-        assert npz["format_version"].item() == 1
+        assert npz["format_version"].item() == (2 if artifact_kind == "fit" else 1)
         assert npz["artifact_kind"].shape == ()
         assert npz["artifact_kind"].dtype.kind == "U"
         assert npz["artifact_kind"].item() == artifact_kind

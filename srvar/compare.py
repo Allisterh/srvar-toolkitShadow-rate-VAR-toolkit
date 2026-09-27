@@ -928,6 +928,7 @@ def make_tempered_canonical_prior(
         family="niw",
         niw=niw,
         minnesota_canonical=tempered_canonical,
+        method="minnesota_tempered",
     )
 
 

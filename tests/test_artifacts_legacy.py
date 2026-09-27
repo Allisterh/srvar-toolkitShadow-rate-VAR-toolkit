@@ -104,7 +104,7 @@ def test_marked_invalid_artifacts_do_not_use_legacy_opt_in(tmp_path: Path, loade
     unknown_version = tmp_path / "unknown_version.npz"
     np.savez_compressed(
         unknown_version,
-        format_version=np.asarray(2, dtype=np.int64),
+        format_version=np.asarray(999, dtype=np.int64),
         artifact_kind=np.asarray("fit" if loader is load_fit_npz else "forecast", dtype=str),
         variables=np.asarray(["y"], dtype=object),
     )
@@ -160,5 +160,7 @@ sampler:
 
     with pytest.raises(ValueError, match="legacy pickle-backed"):
         load_run_dir(out)
-    loaded = load_run_dir(out, allow_legacy_pickle=True)
+    with pytest.raises(ValueError, match="no saved prior"):
+        load_run_dir(out, allow_legacy_pickle=True)
+    loaded = load_fit_npz(out / "fit_result.npz", allow_legacy_pickle=True)
     assert loaded.dataset.variables == ["y"]

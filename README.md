@@ -445,10 +445,16 @@ from srvar.artifacts import load_run_dir
 fit_res = load_run_dir("outputs/my_run")
 ```
 
-New artifacts do not require pickle deserialisation. Artifacts written before the format migration
-need `allow_legacy_pickle=True` and must only be loaded when their source and integrity are trusted;
-that option can execute pickle code. See the [artifact reference](docs/reference/artifacts.md) for
-the migration details.
+New fit artifacts use format version 2 and retain the resolved prior and constructor provenance.
+`load_run_dir` restores that prior directly; it does not recompute it from the configuration's
+prior section or current defaults. Model and sampler settings still come from `config.yml`.
+Forecast artifacts remain version 1. Neither format requires pickle deserialisation.
+
+Older fit files without a saved prior can be inspected with `load_fit_npz`, but `load_run_dir`
+rejects them rather than inventing a target model. Regenerate runs using verified explicit priors
+to produce version-2 artifacts. Raw files predating the safe format require the explicit
+`allow_legacy_pickle=True` option and a trusted source; that option can execute pickle code.
+See the [artifact reference](docs/reference/artifacts.md) for the compatibility boundary.
 
 For an end-to-end example (fit → IRF/FEVD/HD, including factor SV), see
 `examples/fsv_structural_analysis.py`.
