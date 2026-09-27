@@ -74,8 +74,9 @@ variance draws.
 
 Full DL hierarchy calibration and stochastic-volatility convergence remain
 experimental. Component tests and passing CI do not establish empirical validity.
-The latest DL rate-policy decision remains pending; this candidate is not a
-publication or scientific approval. See [release scope](docs/user-guide/limitations.md).
+The maintainer approved the specified DL rate policy and public inference
+contracts for 0.4.0 on 27 September 2026. This approval excludes full-model
+calibration and empirical claims. See [release scope](docs/user-guide/limitations.md).
 
 ### Built With
 
@@ -302,7 +303,8 @@ DL empirical-Bayes residual rates use normalised AR regressions without an absol
 variance floor. They require positive residual degrees of freedom, full rank and
 numerically resolved residuals. DL `min_sigma2` has been removed; use saved rates
 in explicit mode to reproduce an earlier prior. Minnesota constructors retain
-their separate floor policy. The new rate policy needs its own scientific review.
+their separate floor policy. The maintainer approved this rate-construction
+policy; full DL calibration and empirical claims remain unqualified.
 
 DL residual priors now require an explicit Python mode: `PriorSpec.from_dl(..., residual_prior="empirical_bayes", y=training_values, p=p)` uses `IG(2, sigma2_hat_i)`, while `residual_prior="explicit"` requires both `nu0` and diagonal `s0`. YAML defaults to empirical Bayes, estimated within each training window. Earlier default-configured DL runs used `IG(N + 2, 1)`; explicit overrides may have used other values. Triangular SV now accepts canonical Minnesota equation-specific precisions and rejects `minnesota_legacy`; custom shared Gaussian covariances remain supported. These changes alter the fitted models, so regenerate affected results in new output directories and obtain a separate scientific review. Component approval does not establish full-model convergence or empirical validity. See [MCMC semantics](docs/theory/mcmc.md) and the [configuration reference](docs/user-guide/configuration-reference.md).
 

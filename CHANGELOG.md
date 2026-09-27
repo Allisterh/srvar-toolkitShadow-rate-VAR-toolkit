@@ -8,9 +8,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [0.4.0] - 2026-09-27
 
-Prepared alpha candidate; publication and the latest DL rate-policy scientific
-decision remain pending. The maintainer explicitly approved a pre-1.0 minor
-version for these breaking changes; this does not assert stable model calibration.
+The maintainer approved the specified DL rate policy, public inference contracts
+and release tag on 27 September 2026. PyPI publication requires a separate
+decision. The approved pre-1.0 minor version contains breaking changes; approval
+does not establish full-model calibration or empirical validity.
 
 ### Breaking changes
 

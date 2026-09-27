@@ -6,10 +6,11 @@ Tag pushes build and retain distributions; they cannot publish a package to PyPI
 ## Current candidate
 
 Version 0.4.0 is an alpha candidate with explicitly authorised pre-1.0 breaking
-changes. It has not been published. The latest DL rate-policy scientific decision
-remains pending; release checks and package builds cannot supply that decision.
-Keep the PR in draft until its numerical/public-contract reviews and final-head
-CI checks pass. Enforced and experimental boundaries are listed in
+changes. The maintainer approved its specified DL rate policy, public inference
+contracts, integration and tag on 27 September 2026. PyPI publication remains a
+separate decision after inspection of the tag build. Approval excludes full-model
+calibration and empirical claims. Final-head CI must pass before integration.
+Enforced and experimental boundaries are listed in
 {doc}`../user-guide/limitations`.
 
 ## First-time administrator setup

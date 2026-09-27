@@ -14,8 +14,9 @@ construction do not imply that inference with those objects is supported.
 ELB Cholesky historical decomposition raises an error until latent histories are
 paired with parameter draws. Neither `use_latent=True` nor `False` bypasses it.
 Full DL hierarchy and SV fits remain experimental: diagnostics and component
-checks do not establish calibration or empirical validity. The latest rate-policy
-scientific decision remains pending for this 0.4.0 alpha candidate.
+checks do not establish calibration or empirical validity. The maintainer approved
+the specified DL rate-construction policy and public inference contracts for
+0.4.0 on 27 September 2026; that decision does not extend to these broader claims.
 
 ## Modeling limitations
 
