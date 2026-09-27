@@ -93,7 +93,7 @@ python -m pdb -m pytest -k test_sv_factor -vv
 
 ### Deploy / release
 
-> TODO: No release/publish workflow is documented in-repo (PyPI, tags, etc.).
+The release workflow tests the exact selected tag before building distributions. Publication requires explicit workflow dispatch and the protected PyPI environment; see `docs/getting-started/releasing.md`.
 
 ## Code Style & Conventions
 
@@ -165,8 +165,8 @@ Key components:
 - Network isolation:
   - FRED tests mock network boundaries; avoid real HTTP calls in tests.
 - CI:
-  - > TODO: No CI workflow is configured in this repo; run the local commands above.
-  - If CI is added later, it should run at least `pytest` and `ruff check srvar tests`.
+  - `.github/workflows/ci.yml` runs pytest, Ruff and documentation checks, plus an optional-integration job for xarray, ArviZ and Numba.
+  - `.github/workflows/release.yml` runs the suite with optional integrations at the selected release tag before building distributions.
 
 ## Security & Compliance
 

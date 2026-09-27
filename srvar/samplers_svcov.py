@@ -30,6 +30,7 @@ def _sample_beta_triangular_svrw(
     h: np.ndarray,
     m0: np.ndarray,
     v0: np.ndarray,
+    beta: np.ndarray,
     rng: np.random.Generator,
     jitter: float = 1e-6,
 ) -> np.ndarray:
@@ -39,8 +40,11 @@ def _sample_beta_triangular_svrw(
         Y = X B + V
         Q V' = E' ,   E_t ~ N(0, diag(exp(h_t)))
 
-    where Q is upper-triangular with ones on the diagonal. Conditional on (Q, h),
-    columns of B can be sampled sequentially from last to first.
+    where Q is upper-triangular with ones on the diagonal. One Gibbs sweep
+    updates each coefficient column conditional on every transformed residual
+    it affects and the current values of the other columns. The caller retains
+    beta between sweeps. Coefficient columns have independent N(m0[:, i], v0)
+    priors; this is not a sequence of independent joint-posterior draws.
     """
     xt = np.asarray(x, dtype=float)
     yt = np.asarray(y, dtype=float)
@@ -67,36 +71,27 @@ def _sample_beta_triangular_svrw(
         raise ValueError("jitter must be positive")
 
     inv_v0 = solve_psd(v0t, np.eye(k, dtype=float))
-    beta = np.empty((k, n), dtype=float)
+    beta_out = np.asarray(beta, dtype=float).copy()
+    if beta_out.shape != (k, n) or not np.isfinite(beta_out).all():
+        raise ValueError("beta must contain finite current coefficients with shape (K, N)")
+    precision_weights = np.exp(-ht)
+    transformed_residual = (yt - xt @ beta_out) @ qt.T
 
-    # work backwards because y_star[:, i] depends on columns i..N-1
     for i in range(n - 1, -1, -1):
-        y_star_i = yt[:, i].copy()
-        for j in range(i + 1, n):
-            qij = float(qt[i, j])
-            if qij != 0.0:
-                y_star_i += qij * yt[:, j]
+        q_column = qt[:, i]
+        residual_without_i = transformed_residual + (xt @ beta_out[:, i])[:, None] * q_column
+        weights = np.sum(precision_weights * q_column**2, axis=1)
+        ktheta = symmetrize(inv_v0 + xt.T @ (weights[:, None] * xt))
+        weighted_target = np.sum(precision_weights * q_column * residual_without_i, axis=1)
+        rhs = inv_v0 @ m0t[:, i] + xt.T @ weighted_target
+        chol = cholesky_jitter(ktheta, jitter=jitter)
+        mean = scipy.linalg.cho_solve((chol, True), rhs, check_finite=False)
+        beta_out[:, i] = mean + scipy.linalg.solve_triangular(
+            chol.T, rng.standard_normal(k), lower=False, check_finite=False
+        )
+        transformed_residual = residual_without_i - (xt @ beta_out[:, i])[:, None] * q_column
 
-        offset = np.zeros(t_eff, dtype=float)
-        for j in range(i + 1, n):
-            qij = float(qt[i, j])
-            if qij != 0.0:
-                offset += qij * (xt @ beta[:, j])
-        y_tilde = y_star_i - offset
-
-        w = np.exp(-ht[:, i])
-        xtwx = xt.T @ (w[:, None] * xt)
-        ktheta = symmetrize(inv_v0 + xtwx + jitter * np.eye(k, dtype=float))
-
-        rhs = inv_v0 @ m0t[:, i] + xt.T @ (w * y_tilde)
-        thetahat = solve_psd(ktheta, rhs)
-
-        chol = cholesky_jitter(ktheta)
-        z = rng.standard_normal(k)
-        theta = thetahat + scipy.linalg.solve_triangular(chol.T, z, lower=False, check_finite=False)
-        beta[:, i] = theta
-
-    return beta
+    return beta_out
 
 
 def _update_q_triangular(
@@ -216,6 +211,7 @@ def _fit_svcov(
         x, y = design_matrix(y_lat, model.p, include_intercept=model.include_intercept)
 
         beta = _sample_beta_triangular_svrw(
+            beta=beta,
             x=x,
             y=y,
             q=q,

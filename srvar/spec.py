@@ -117,7 +117,7 @@ class ModelSpec:
         Optional stochastic volatility configuration. When enabled, the model uses a
         stochastic volatility specification for time-varying variances (random-walk or
         AR(1) dynamics). Residual covariance can be diagonal (independent shocks) or a
-        triangular factorization with time-invariant correlations.
+        fixed triangular factorization with generally time-varying correlations.
 
     Notes
     -----

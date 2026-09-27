@@ -5,6 +5,7 @@ import numpy as np
 from .bvar import sample_posterior_niw, simulate_var_forecast
 from .data.dataset import Dataset
 from .elb import apply_elb_floor
+from .forecast_state import _terminal_lags
 from .results import FitResult, ForecastResult
 from .samplers import _fit_elb_gibbs, _fit_fsv, _fit_no_elb, _fit_svcov, _fit_svrw
 from .spec import ModelSpec, PriorSpec, SamplerConfig
@@ -199,6 +200,9 @@ def forecast(
     -----
     If ELB is enabled in the fitted model, returned ``draws`` are the observed (floored)
     draws, and ``latent_draws`` contains the unconstrained latent draws.
+    Censored terminal lags require retained ``latent_draws`` aligned with parameter
+    draws; missing or malformed histories raise ``ValueError``. Each SV forecast
+    observation uses a newly transitioned future volatility state, including horizon one.
 
     If you call ``forecast(fit, horizons=[1, 3], ...)`` then ``result.mean[0]`` corresponds
     to horizon 1 and ``result.mean[2]`` corresponds to horizon 3.
@@ -269,11 +273,6 @@ def forecast(
             "steady_state forecasting requires stored beta_draws; reduce burn_in or thin"
         )
 
-    base_dataset = fit.latent_dataset if fit.latent_dataset is not None else fit.dataset
-    if base_dataset.T < p:
-        raise ValueError("dataset is too short for requested lag order p")
-    y_last = base_dataset.values[-p:, :]
-
     if fit.beta_draws is not None and fit.sigma_draws is not None:
         # sample with replacement from stored posterior draws
         homoskedastic_idx: np.ndarray
@@ -297,13 +296,14 @@ def forecast(
             homoskedastic_idx = stable_idx[sel]
         else:
             homoskedastic_idx = rng.integers(0, fit.beta_draws.shape[0], size=draws)
+        y_last_draws = _terminal_lags(fit, indices=homoskedastic_idx, draws=draws)
         beta_draws = fit.beta_draws[homoskedastic_idx]
         sigma_draws = fit.sigma_draws[homoskedastic_idx]
 
         sims = np.empty((draws, hmax, fit.dataset.N), dtype=float)
         for d in range(draws):
             sims[d] = simulate_var_forecast(
-                y_last=y_last,
+                y_last=y_last_draws[d],
                 beta=beta_draws[d],
                 sigma=sigma_draws[d],
                 horizon=hmax,
@@ -340,8 +340,9 @@ def forecast(
             triangular_sv_idx = stable_idx[sel]
         else:
             triangular_sv_idx = rng.integers(0, fit.beta_draws.shape[0], size=draws)
+        y_last_draws = _terminal_lags(fit, indices=triangular_sv_idx, draws=draws)
         beta_draws = fit.beta_draws[triangular_sv_idx]
-        h_draws = fit.h_draws[triangular_sv_idx]
+        h_draws = fit.h_draws[:, -1, :][triangular_sv_idx]
         sigma_eta2_draws = fit.sigma_eta2_draws[triangular_sv_idx]
         q_draws = fit.q_draws[triangular_sv_idx]
         sv_gamma0_draws = (
@@ -351,8 +352,8 @@ def forecast(
 
         sims = np.empty((draws, hmax, fit.dataset.N), dtype=float)
         for d in range(draws):
-            lags = y_last.copy()
-            h_curr = h_draws[d, -1, :].copy()
+            lags = y_last_draws[d].copy()
+            h_curr = h_draws[d].copy()
             sig_eta = sigma_eta2_draws[d].copy()
             q = q_draws[d]
             gamma0 = sv_gamma0_draws[d] if sv_gamma0_draws is not None else None
@@ -368,6 +369,12 @@ def forecast(
                 x_row = np.concatenate(x_parts)
 
                 mean = x_row @ beta_draws[d]
+                if gamma0 is not None and phi is not None:
+                    h_curr = (
+                        gamma0 + phi * h_curr + np.sqrt(sig_eta) * rng.normal(size=fit.dataset.N)
+                    )
+                else:
+                    h_curr = h_curr + np.sqrt(sig_eta) * rng.normal(size=fit.dataset.N)
                 z = rng.normal(size=fit.dataset.N)
                 eps = z * np.exp(0.5 * h_curr)
                 innov = scipy.linalg.solve_triangular(q, eps, lower=False, check_finite=False)
@@ -375,12 +382,6 @@ def forecast(
 
                 path[h_step] = y_next
                 lags = np.vstack([lags[1:, :], y_next]) if p > 1 else y_next.reshape(1, -1)
-                if gamma0 is not None and phi is not None:
-                    h_curr = (
-                        gamma0 + phi * h_curr + np.sqrt(sig_eta) * rng.normal(size=fit.dataset.N)
-                    )
-                else:
-                    h_curr = h_curr + np.sqrt(sig_eta) * rng.normal(size=fit.dataset.N)
 
             sims[d] = path
     elif (
@@ -413,21 +414,22 @@ def forecast(
         else:
             factor_sv_idx = rng.integers(0, fit.beta_draws.shape[0], size=draws)
 
+        y_last_draws = _terminal_lags(fit, indices=factor_sv_idx, draws=draws)
         beta_draws = fit.beta_draws[factor_sv_idx]
-        h_eta_draws = fit.h_draws[factor_sv_idx]
+        h_eta_draws = fit.h_draws[:, -1, :][factor_sv_idx]
         sigma_eta2_eta_draws = fit.sigma_eta2_draws[factor_sv_idx]
         lam_draws = fit.lambda_draws[factor_sv_idx]
-        h_f_draws = fit.h_factor_draws[factor_sv_idx]
+        h_f_draws = fit.h_factor_draws[:, -1, :][factor_sv_idx]
         sigma_eta2_f_draws = fit.sigma_eta2_factor_draws[factor_sv_idx]
 
         sims = np.empty((draws, hmax, fit.dataset.N), dtype=float)
         for d in range(draws):
-            lags = y_last.copy()
-            h_eta_curr = h_eta_draws[d, -1, :].copy()
+            lags = y_last_draws[d].copy()
+            h_eta_curr = h_eta_draws[d].copy()
             sig_eta2_eta = sigma_eta2_eta_draws[d].copy()
             lam = lam_draws[d]
 
-            h_f_curr = h_f_draws[d, -1, :].copy()
+            h_f_curr = h_f_draws[d].copy()
             sig_eta2_f = sigma_eta2_f_draws[d].copy()
 
             k = int(h_f_curr.shape[0])
@@ -443,6 +445,8 @@ def forecast(
 
                 mean = x_row @ beta_draws[d]
 
+                h_eta_curr = h_eta_curr + np.sqrt(sig_eta2_eta) * rng.normal(size=fit.dataset.N)
+                h_f_curr = h_f_curr + np.sqrt(sig_eta2_f) * rng.normal(size=k)
                 f_step = rng.normal(size=k) * np.exp(0.5 * h_f_curr)
                 eta_step = rng.normal(size=fit.dataset.N) * np.exp(0.5 * h_eta_curr)
                 eps = lam @ f_step + eta_step
@@ -465,9 +469,6 @@ def forecast(
                 path[h_step] = y_next
 
                 lags = np.vstack([lags[1:, :], y_next]) if p > 1 else y_next.reshape(1, -1)
-
-                h_eta_curr = h_eta_curr + np.sqrt(sig_eta2_eta) * rng.normal(size=fit.dataset.N)
-                h_f_curr = h_f_curr + np.sqrt(sig_eta2_f) * rng.normal(size=k)
 
             sims[d] = path
     elif (
@@ -494,8 +495,9 @@ def forecast(
             diagonal_sv_idx = stable_idx[sel]
         else:
             diagonal_sv_idx = rng.integers(0, fit.beta_draws.shape[0], size=draws)
+        y_last_draws = _terminal_lags(fit, indices=diagonal_sv_idx, draws=draws)
         beta_draws = fit.beta_draws[diagonal_sv_idx]
-        h_draws = fit.h_draws[diagonal_sv_idx]
+        h_draws = fit.h_draws[:, -1, :][diagonal_sv_idx]
         sigma_eta2_draws = fit.sigma_eta2_draws[diagonal_sv_idx]
         sv_gamma0_draws = (
             fit.sv_gamma0_draws[diagonal_sv_idx] if fit.sv_gamma0_draws is not None else None
@@ -504,8 +506,8 @@ def forecast(
 
         sims = np.empty((draws, hmax, fit.dataset.N), dtype=float)
         for d in range(draws):
-            lags = y_last.copy()
-            h_curr = h_draws[d, -1, :].copy()
+            lags = y_last_draws[d].copy()
+            h_curr = h_draws[d].copy()
             sig_eta = sigma_eta2_draws[d].copy()
             gamma0 = sv_gamma0_draws[d] if sv_gamma0_draws is not None else None
             phi = sv_phi_draws[d] if sv_phi_draws is not None else None
@@ -519,22 +521,23 @@ def forecast(
                 x_row = np.concatenate(x_parts)
 
                 mean = x_row @ beta_draws[d]
-                eps = rng.normal(size=fit.dataset.N) * np.exp(0.5 * h_curr)
-                y_next = mean + eps
-
-                path[h_step] = y_next
-                lags = np.vstack([lags[1:, :], y_next]) if p > 1 else y_next.reshape(1, -1)
                 if gamma0 is not None and phi is not None:
                     h_curr = (
                         gamma0 + phi * h_curr + np.sqrt(sig_eta) * rng.normal(size=fit.dataset.N)
                     )
                 else:
                     h_curr = h_curr + np.sqrt(sig_eta) * rng.normal(size=fit.dataset.N)
+                eps = rng.normal(size=fit.dataset.N) * np.exp(0.5 * h_curr)
+                y_next = mean + eps
+
+                path[h_step] = y_next
+                lags = np.vstack([lags[1:, :], y_next]) if p > 1 else y_next.reshape(1, -1)
 
             sims[d] = path
     else:
         if fit.posterior is None:
             raise ValueError("fit has no posterior parameters or stored draws")
+        y_last_draws = _terminal_lags(fit, indices=None, draws=draws)
         if stationarity_l == "reject":
             from .var import is_stationary
 
@@ -591,7 +594,7 @@ def forecast(
         sims = np.empty((draws, hmax, fit.dataset.N), dtype=float)
         for d in range(draws):
             sims[d] = simulate_var_forecast(
-                y_last=y_last,
+                y_last=y_last_draws[d],
                 beta=beta_draws[d],
                 sigma=sigma_draws[d],
                 horizon=hmax,

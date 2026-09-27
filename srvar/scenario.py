@@ -7,6 +7,7 @@ import numpy as np
 from .bvar import sample_posterior_niw
 from .data.dataset import Dataset
 from .elb import apply_elb_floor
+from .forecast_state import _terminal_lags
 from .linalg import solve_psd
 from .results import FitResult, ForecastResult
 from .var import is_stationary
@@ -252,6 +253,9 @@ def conditional_forecast(
     - When ELB is enabled, constraints are applied to the **latent (unfloored)** process
       used for simulation. Returned `ForecastResult.draws` are observed (floored) draws and
       `ForecastResult.latent_draws` contains the latent conditional draws.
+      Censored terminal lags require retained histories paired with parameter draws.
+    - Non-empty constraints with non-Gaussian shocks raise ``ValueError``. Empty
+      constraints delegate to ordinary forecasting for homoskedastic models.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -279,10 +283,9 @@ def conditional_forecast(
             "conditional_forecast is not yet supported for stochastic volatility models"
         )
 
-    base_dataset: Dataset = fit.latent_dataset if fit.latent_dataset is not None else fit.dataset
+    base_dataset: Dataset = fit.dataset
     if base_dataset.T < p:
         raise ValueError("dataset is too short for requested lag order p")
-    y_last = base_dataset.values[-p:, :]
 
     constraints_list = _parse_constraints(
         constraints,
@@ -303,7 +306,14 @@ def conditional_forecast(
             rng=rng,
         )
 
+    if fit.model.shocks is not None and fit.model.shocks.family != "gaussian":
+        raise ValueError(
+            "conditional_forecast with constraints supports only Gaussian shocks; "
+            "use forecast for unconstrained robust predictions"
+        )
+
     # Select or sample parameter draws for each predictive path.
+    selected_indices: np.ndarray | None = None
     if fit.beta_draws is not None and fit.sigma_draws is not None:
         avail = int(fit.beta_draws.shape[0])
         if avail < 1:
@@ -328,6 +338,7 @@ def conditional_forecast(
         else:
             idx = rng.integers(0, avail, size=draws)
 
+        selected_indices = idx
         beta_draws = np.asarray(fit.beta_draws[idx], dtype=float)
         sigma_draws = np.asarray(fit.sigma_draws[idx], dtype=float)
 
@@ -382,6 +393,7 @@ def conditional_forecast(
             beta_draws = np.stack(accepted_beta)
             sigma_draws = np.stack(accepted_sigma)
 
+    y_last_draws = _terminal_lags(fit, indices=selected_indices, draws=draws)
     n = int(base_dataset.N)
     sims = np.empty((draws, hmax, n), dtype=float)
 
@@ -397,7 +409,7 @@ def conditional_forecast(
         )
         phi = _ma_matrices(a_mats=a_mats, horizon=hmax - 1)  # (hmax, N, N) for offsets 0..hmax-1
         mu = _mean_path(
-            y_last=y_last,
+            y_last=y_last_draws[d],
             beta=beta,
             horizon=hmax,
             include_intercept=fit.model.include_intercept,
@@ -430,7 +442,7 @@ def conditional_forecast(
         eps_adj = e_adj.reshape(hmax, n)
 
         sims[d] = _simulate_with_innovations(
-            y_last=y_last,
+            y_last=y_last_draws[d],
             beta=beta,
             innovations=eps_adj,
             include_intercept=fit.model.include_intercept,

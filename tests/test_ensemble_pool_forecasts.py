@@ -84,3 +84,31 @@ def test_pool_forecasts_weights_validation() -> None:
         pool_forecasts([fc0, fc1], weights=[0.1])
     with pytest.raises(ValueError, match="weights"):
         pool_forecasts([fc0, fc1], weights=[1.0, -1.0])
+
+
+@pytest.mark.parametrize("models", [1, 2])
+def test_pool_preserves_observed_latent_pairing(models: int) -> None:
+    forecasts = []
+    for i in range(models):
+        latent = np.array([-2.0, 3.0 + i]).reshape(2, 1, 1)
+        observed = np.maximum(latent, 0.0)
+        forecasts.append(
+            ForecastResult(
+                variables=["r"],
+                horizons=[1],
+                draws=observed,
+                latent_draws=latent,
+                mean=observed.mean(axis=0),
+                quantiles={},
+            )
+        )
+    result = pool_forecasts(forecasts, draws=1000, rng=np.random.default_rng(41))
+    np.testing.assert_array_equal(result.draws, np.maximum(result.latent_draws, 0.0))
+
+
+def test_pool_rejects_latent_draw_count_mismatch() -> None:
+    from dataclasses import replace
+
+    fc = _const_forecast(value=1.0, draws=5, horizons=[1])
+    with pytest.raises(ValueError, match="latent_draws"):
+        pool_forecasts([replace(fc, latent_draws=np.ones((2, 1, 1)))])

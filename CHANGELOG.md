@@ -6,6 +6,38 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Added
+
+- Standalone component calibration, revision-specific local benchmark and empirical
+  multi-chain diagnostic scripts, with source manifests and retained failure evidence.
+
+### Fixed
+
+- Retain residual variance state between coefficient updates in homoskedastic DL and
+  canonical Minnesota samplers, including ELB and steady-state paths.
+- Include every coupled likelihood term in triangular SV coefficient Gibbs updates.
+- Advance volatility states before each forecast observation, including the first horizon.
+- Pair ELB terminal histories with retained parameter draws, including after stationarity
+  filtering, and preserve observed/latent draw pairing when pooling forecasts.
+- Reject constrained Student-t and outlier-mixture scenarios instead of using Gaussian shocks.
+- Centre scalar Newey-West inputs and normalise all lagged products by the retained sample size.
+- Restrict the ArviZ extra to `>=0.17,<1` for the supported `InferenceData` interface.
+- Correct triangular SV descriptions: a fixed triangular factor generally permits changing
+  correlations.
+
+### Changed
+
+- Document the dimension-dependent DL residual-variance default and the missing
+  dependent-variable scaling of legacy Minnesota coefficient covariances in triangular
+  SV. Prior repairs remain separate from the approved component transitions; this
+  documentation change leaves all numerical source and qualification harnesses unchanged.
+- CI exercises xarray, ArviZ and Numba; release builds require tests at the exact selected tag.
+- Numerical results and seeded random-number sequences change. Refit affected models and
+  regenerate forecasts and comparisons. Censored terminal ELB lags now require aligned
+  `latent_draws`; refit if these were not retained. Public result schemas are unchanged.
+- Added analytical regression checks and documented sampler semantics. These checks do not
+  replace human scientific review, convergence assessment, full calibration or replication.
+
 ## [0.3.1] - 2026-07-18
 
 ### Added

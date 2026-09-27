@@ -25,8 +25,8 @@ class VolatilitySpec:
         ``Sigma_t = Q^{-1} diag(exp(h_t)) (Q^{-1})'``
 
     where ``Q`` is upper-triangular with ones on the diagonal. This yields a
-    full residual covariance matrix with time-varying variances and a time-invariant
-    correlation structure.
+    full residual covariance matrix with time-varying variances and, in general,
+    time-varying correlations, despite the fixed triangular factor.
 
     Setting ``covariance='factor'`` enables factor stochastic volatility (FSV):
 
@@ -56,8 +56,8 @@ class VolatilitySpec:
         with ``phi`` and ``gamma0`` sampled in the Gibbs routine.
     covariance:
         Covariance structure. ``"diagonal"`` is independent shocks. ``"triangular"``
-        uses an upper-triangular factor ``Q`` with ones on the diagonal (a CCCM-style
-        multivariate SV factorization). ``"factor"`` enables factor SV (FSV).
+        uses a fixed upper-triangular factor ``Q`` with ones on the diagonal.
+        ``"factor"`` enables factor SV (FSV).
     q_prior_var:
         Prior variance for the off-diagonal elements of ``Q`` when
         ``covariance='triangular'``.
@@ -162,7 +162,6 @@ try:
 
     _HAVE_NUMBA = True
 except Exception:  # pragma: no cover
-    _nb = None
     _HAVE_NUMBA = False
 
 

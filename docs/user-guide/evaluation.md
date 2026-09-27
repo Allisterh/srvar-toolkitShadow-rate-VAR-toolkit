@@ -207,6 +207,8 @@ print(res.statistic, res.pvalue)
 This uses a Newey–West/HAC variance estimate (default lag `horizon-1`) and an optional
 Harvey–Leybourne–Newbold small-sample correction.
 
+The scalar HAC helper centres retained observations and divides every lagged cross-product by the same retained sample size, matching the matrix helper. Bartlett weights use the lag limit capped at `n-1`. Non-finite observations are removed; this compresses time gaps, so callers needing a regular calendar must handle missing periods before calling the test. Only round-off-sized negative variance estimates are clipped to zero.
+
 ## Model comparison (Giacomini–White)
 
 To match the “CPA test” convention used in some macro forecast-comparison papers (including the
@@ -224,6 +226,8 @@ print(res.statistic, res.pvalue, res.significance_code)
 standard conditional predictive ability setup).
 
 ## Forecast combinations (pooling)
+
+Pooling selects observed and latent paths with the same model and draw indices, preserving their joint relationship. A pooled latent array is returned only when every input supplies one; each latent array must then match its observed array in shape, including draw count.
 
 For simple forecast combinations (ensembles), you can pool predictive draws across models:
 

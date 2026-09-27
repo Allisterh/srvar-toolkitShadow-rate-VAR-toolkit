@@ -77,7 +77,7 @@ model:
 
     # Residual covariance:
     # - "diagonal": independent shocks
-    # - "triangular": time-invariant correlation structure (CCC-style)
+    # - "triangular": fixed triangular factor; generally time-varying correlations
     # - "factor": factor stochastic volatility (full, time-varying covariance; v1: NIW + RW only)
     covariance: "diagonal"         # optional (default: "diagonal")
     q_prior_var: 1.0               # optional (default: 1.0; required positive for triangular)
@@ -189,6 +189,7 @@ prior:
 Notes:
 - `method: "minnesota"` remains supported as a backward-compatible alias for `method: "minnesota_legacy"`.
 - `method: "minnesota_legacy"` is the compatibility path and remains the default NIW shrinkage option.
+- With triangular SV, its shared `v0` is used without the dependent-variable covariance scaling present under NIW. This combination does not implement the intended equation-specific Minnesota variance ratios. The coefficient sweep targets the supplied independent column priors; the constructor mapping is a separate limitation. See {doc}`../theory/mcmc`.
 
 ### NIW canonical Minnesota shrinkage
 
@@ -209,7 +210,7 @@ prior:
 Notes:
 - `method: "minnesota_canonical"` uses equation-specific own-vs-cross shrinkage.
 - It currently supports homoskedastic models and diagonal stochastic volatility only.
-- Triangular SV and factor SV must continue to use the legacy NIW path.
+- Triangular SV and factor SV currently reject this canonical option. The accepted legacy NIW configuration on the triangular path has the covariance-scaling limitation above; acceptance by configuration validation is not an endorsement of that prior mapping.
 
 ### NIW tempered Minnesota bridge
 
@@ -273,6 +274,8 @@ prior:
     abeta: 0.5                     # optional
     dl_scaler: 0.1                 # optional
 ```
+
+For homoskedastic DL, this configuration uses the constructor's residual-variance default $IG(N+2,1)$, where $N$ is the number of variables. Its mean is $1/(N+1)$, so it depends on dimension and residual scale. This inherited default is not recommended as an intended scientific prior. The Python `PriorSpec.from_dl` interface accepts explicit `nu0` and `s0` as inverse-gamma shape and diagonal rates; the YAML DL block above does not expose them. See {doc}`../theory/mcmc` for the transition and qualification boundaries.
 
 ## `sampler`
 

@@ -34,7 +34,9 @@ password as a repository secret.
 
 3. Obtain review for the release commit. Create and push `vX.Y.Z` at that approved commit. An
    annotated or lightweight tag is accepted, but it must point at the approved commit.
-4. Inspect the tag-triggered workflow run. It must pass preflight, build exactly one wheel and one
+4. Inspect the tag-triggered workflow run. It must pass preflight and the full pytest suite at the
+   exact selected tag with xarray, ArviZ and Numba installed. Explicit import checks prevent
+   missing extras from silently skipping coverage. It must then build exactly one wheel and one
    source distribution, pass `twine check`, and import the installed wheel at the tagged version.
    Download the retained artifact if an independent inspection is needed.
 

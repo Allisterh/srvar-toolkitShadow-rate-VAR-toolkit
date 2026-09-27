@@ -88,14 +88,17 @@ def _dl_sample_beta_sigma(
     inv_v0_vec: np.ndarray,
     s0: np.ndarray,
     nu0: float,
+    sigma: np.ndarray,
     rng: np.random.Generator,
     jitter: float = 1e-6,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Sample (beta, Sigma) under a DL diagonal prior precision.
 
-    This sampler mirrors the homoskedastic MATLAB implementation used with DL:
-    equation-wise Gaussian updates for beta and inverse-gamma updates for the
-    per-equation variances (Sigma is treated as diagonal).
+    Coefficients have independent normal priors with the supplied precisions.
+    Residual variances have IG(shape=nu0, rate=s0[i, i]) priors. First draw
+    beta conditional on the current diagonal ``sigma``, then draw new variances
+    conditional on beta. The caller must retain the returned sigma for the next
+    iteration. This is also used by canonical Minnesota; it is not an NIW update.
 
     Indexing
     --------
@@ -127,19 +130,22 @@ def _dl_sample_beta_sigma(
 
     xtx = xt.T @ xt
     beta = np.empty((k, n), dtype=float)
-    sig2 = np.empty(n, dtype=float)
+    current_sigma = np.asarray(sigma, dtype=float)
+    if current_sigma.shape != (n, n):
+        raise ValueError("sigma must have shape (N, N)")
+    sig2 = np.diag(current_sigma).copy()
+    if not np.isfinite(current_sigma).all() or np.any(sig2 <= 0):
+        raise ValueError("sigma must contain finite positive diagonal variances")
+    if np.any(current_sigma != np.diag(sig2)):
+        raise ValueError("sigma must be diagonal for independent-variance sampling")
 
     for i in range(n):
         inv_diag = inv_v0[i * k : (i + 1) * k]
-        sig2[i] = float(s0t[i, i])
 
-        # jitter stabilizes the precision matrix when inv_diag contains extreme values.
-        ktheta = symmetrize(
-            np.diag(inv_diag) + (xtx / max(sig2[i], 1e-12)) + jitter * np.eye(k, dtype=float)
-        )
-        rhs = inv_diag * m0t[:, i] + (xt.T @ yt[:, i]) / max(sig2[i], 1e-12)
-        thetahat = solve_psd(ktheta, rhs)
-        chol = cholesky_jitter(ktheta)
+        ktheta = symmetrize(np.diag(inv_diag) + xtx / sig2[i])
+        rhs = inv_diag * m0t[:, i] + (xt.T @ yt[:, i]) / sig2[i]
+        chol = cholesky_jitter(ktheta, jitter=jitter)
+        thetahat = scipy.linalg.cho_solve((chol, True), rhs, check_finite=False)
         z = rng.standard_normal(k)
         beta[:, i] = thetahat + scipy.linalg.solve_triangular(
             chol.T, z, lower=False, check_finite=False

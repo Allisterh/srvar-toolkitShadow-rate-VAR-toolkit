@@ -20,7 +20,9 @@ def pool_forecasts(
 
     Pooling method: sample models according to `weights` and, for each selected
     model, sample one of its predictive draws. This yields a Monte Carlo
-    approximation to a weighted mixture distribution.
+    approximation to a weighted mixture distribution. Observed and latent paths
+    use the same sampled indices. Latent output requires all inputs to provide
+    latent arrays with exactly the same shapes as their observed draw arrays.
 
     Parameters
     ----------
@@ -97,6 +99,16 @@ def pool_forecasts(
 
     model_idx = rng_.choice(m_models, size=draws_out, replace=True, p=w)
 
+    all_latent = all(fc.latent_draws is not None for fc in forecasts)
+    latent_list = (
+        [np.asarray(fc.latent_draws, dtype=float) for fc in forecasts] if all_latent else []
+    )
+    for latent, observed in zip(latent_list, draws_list, strict=False):
+        if latent.shape != observed.shape:
+            raise ValueError(
+                "each latent_draws array must match its forecast.draws shape (D, H, N)"
+            )
+    pooled_latent = np.empty((draws_out, h, n), dtype=float) if all_latent else None
     pooled = np.empty((draws_out, h, n), dtype=float)
     for k in range(m_models):
         pos = np.where(model_idx == k)[0]
@@ -104,22 +116,8 @@ def pool_forecasts(
             continue
         idx = rng_.integers(0, d_counts[k], size=int(pos.size))
         pooled[pos, :, :] = draws_list[k][idx, :, :]
-
-    all_latent = all(fc.latent_draws is not None for fc in forecasts)
-    pooled_latent: np.ndarray | None
-    if all_latent:
-        latent_list = [np.asarray(fc.latent_draws, dtype=float) for fc in forecasts]
-        if any(ld.shape[1:] != (h, n) for ld in latent_list):
-            raise ValueError("all latent_draws must have identical (H, N) shapes when present")
-        pooled_latent = np.empty((draws_out, h, n), dtype=float)
-        for k in range(m_models):
-            pos = np.where(model_idx == k)[0]
-            if pos.size < 1:
-                continue
-            idx = rng_.integers(0, int(latent_list[k].shape[0]), size=int(pos.size))
+        if pooled_latent is not None:
             pooled_latent[pos, :, :] = latent_list[k][idx, :, :]
-    else:
-        pooled_latent = None
 
     mean = pooled.mean(axis=0)
 

@@ -4,9 +4,9 @@ This project targets transparency and reproducibility and is currently in an **a
 
 ## Modeling limitations
 
-- **Stochastic volatility coverage is still evolving**: diagonal SV, triangular (time-invariant correlation) SV, and factor SV (time-varying full covariance) are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
+- **Stochastic volatility coverage is still evolving**: diagonal SV, triangular SV with a fixed factor and generally time-varying correlations, and factor SV are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
 - **Structural analysis coverage is partial**: reduced-form, Cholesky, and sign-restricted IRFs are supported via `srvar.analysis` (plus FEVD and Cholesky historical decompositions), but other workflows (e.g. sign-restricted historical decompositions) are not yet first-class.
-- **Conditional/scenario forecasts are limited**: `srvar.scenario.conditional_forecast` currently supports homoskedastic VARs. For ELB models, conditioning is applied to the latent (unfloored) process.
+- **Conditional/scenario forecasts are limited**: constraints in `srvar.scenario.conditional_forecast` require homoskedastic Gaussian VARs. Constrained Student-t and outlier-mixture models raise an error because Gaussian conditioning would change the model. Empty constraints delegate to ordinary forecasting for homoskedastic models. For ELB models, conditioning is applied to the latent (unfloored) process.
 - **ELB treatment**: ELB handling is implemented via latent shadow-rate augmentation for selected series.
 - **Robust shocks limitations**: Student‑t and outlier-mixture innovations are supported for homoskedastic VARs and for factor SV. They are not yet supported for diagonal/triangular SV; ELB/steady-state combinations require factor SV.
 
@@ -14,6 +14,8 @@ This project targets transparency and reproducibility and is currently in an **a
 
 - **MCMC diagnostics are your responsibility**: the toolkit returns draws, but does not currently ship full diagnostic tooling (R-hat, ESS, trace diagnostics). You should validate convergence and mixing.
 - **Sensitivity to prior settings**: results can change meaningfully with Minnesota hyperparameters, SSVS spike/slab variances, and SV priors.
+- **Scientific review remains necessary**: the corrected sampler conditionals have analytical regression checks, but full simulation-based calibration and empirical replication remain outstanding. Bayesian LASSO covariance/dimension coherence and shrinkage updates with non-zero prior means require separate review; see {doc}`../theory/mcmc`.
+- **ELB histories must remain paired**: censored terminal lags require retained latent histories aligned with parameter draws. Forecasts cannot substitute the last Gibbs history. Cholesky historical decomposition remains conditional on the final latent history and does not integrate over latent-history uncertainty.
 
 ## Performance considerations
 

@@ -30,6 +30,7 @@ def _fit_no_elb(
     prior_family: str,
     rng: np.random.Generator,
 ) -> FitResult:
+    sigma = np.diag(np.diag(prior.niw.s0)).copy()
     ss = model.steady_state
     if ss is not None:
         y_lat = np.asarray(dataset.values, dtype=float)
@@ -198,6 +199,7 @@ def _fit_no_elb(
                     raise RuntimeError("dl state missing")
 
                 beta_lags, sigma = _dl_sample_beta_sigma(
+                    sigma=sigma,
                     x=x,
                     y=y,
                     m0=m0_ssp,
@@ -227,6 +229,7 @@ def _fit_no_elb(
                         "prior_family='minnesota_canonical' requires prior.minnesota_canonical"
                     )
                 beta_lags, sigma = _dl_sample_beta_sigma(
+                    sigma=sigma,
                     x=x,
                     y=y,
                     m0=m0_ssp,
@@ -402,6 +405,7 @@ def _fit_no_elb(
                 y_w = y
 
             beta, sigma = _dl_sample_beta_sigma(
+                sigma=sigma,
                 x=x_w,
                 y=y_w,
                 m0=niw.m0,
@@ -562,6 +566,7 @@ def _fit_no_elb(
                 y_w = y
 
             beta, sigma = _dl_sample_beta_sigma(
+                sigma=sigma,
                 x=x_w,
                 y=y_w,
                 m0=niw.m0,
@@ -724,6 +729,7 @@ def _fit_elb_gibbs(
         elb_t_idx[j] = np.where(mask)[0]
         y_lat[mask, j] = elb.bound - elb.init_offset
 
+    sigma = np.diag(np.diag(prior.niw.s0)).copy()
     ss = model.steady_state
     if ss is not None:
         n = int(y_lat.shape[1])
@@ -888,6 +894,7 @@ def _fit_elb_gibbs(
                     raise RuntimeError("dl state missing")
 
                 beta_lags, sigma = _dl_sample_beta_sigma(
+                    sigma=sigma,
                     x=x,
                     y=y,
                     m0=m0_ssp,
@@ -918,6 +925,7 @@ def _fit_elb_gibbs(
                         "prior_family='minnesota_canonical' requires prior.minnesota_canonical"
                     )
                 beta_lags, sigma = _dl_sample_beta_sigma(
+                    sigma=sigma,
                     x=x,
                     y=y,
                     m0=m0_ssp,
@@ -1127,6 +1135,7 @@ def _fit_elb_gibbs(
                 raise RuntimeError("dl state missing")
 
             beta, sigma = _dl_sample_beta_sigma(
+                sigma=sigma,
                 x=x,
                 y=y,
                 m0=niw.m0,
@@ -1156,6 +1165,7 @@ def _fit_elb_gibbs(
                     "prior_family='minnesota_canonical' requires prior.minnesota_canonical"
                 )
             beta, sigma = _dl_sample_beta_sigma(
+                sigma=sigma,
                 x=x,
                 y=y,
                 m0=niw.m0,

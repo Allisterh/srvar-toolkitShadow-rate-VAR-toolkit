@@ -81,7 +81,7 @@ xarray = [
 ]
 
 arviz = [
-  "arviz>=0.17",
+  "arviz>=0.17,<1",
   "xarray>=2024.7",
 ]
 

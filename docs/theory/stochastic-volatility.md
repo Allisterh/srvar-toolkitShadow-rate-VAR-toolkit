@@ -7,7 +7,7 @@ Stochastic volatility (SV) allows the variance of VAR residuals to change over t
 This toolkit implements SV variants commonly used in the Bayesian VAR literature:
 
 - **log-volatility dynamics**: random walk (`SVRW`) or AR(1)
-- **residual covariance**: diagonal covariance (independent shocks) or a triangular factorization with time-invariant correlations (CCC-style)
+- **residual covariance**: diagonal covariance (independent shocks), a fixed triangular factor with generally time-varying correlations, or factor SV
 
 ## Model sketch
 
@@ -43,7 +43,21 @@ $$
 \Sigma_t = Q^{-1}\,\mathrm{diag}(\exp(h_t))\,(Q^{-1})',
 $$
 
-where $Q$ is upper-triangular with ones on the diagonal. This yields **time-varying variances** with a **time-invariant correlation structure**.
+where $Q$ is upper-triangular with ones on the diagonal. The triangular factor is fixed within a parameter draw, but changing relative innovation variances generally changes correlations.
+
+For example, if $Q_{12}=q$ in a two-variable model with diagonal variances $d_1,d_2$, then
+
+$$
+\rho_{12,t} = \frac{-q\sqrt{d_{2,t}}}{\sqrt{d_{1,t}+q^2d_{2,t}}}.
+$$
+
+This correlation changes with the variance ratio unless special restrictions hold. The model therefore does not impose constant conditional correlations.
+
+## Forecast state timing
+
+The first forecast observation uses $h_{T+1}$, sampled from the state transition conditional on the retained $h_T$. Each subsequent observation advances the state once more. This applies to diagonal and triangular RW/AR(1) models and to both the factor and idiosyncratic RW states in factor SV.
+
+For a Gaussian diagonal RW model, the one-step innovation variance conditional on $h_T$ and $\sigma_\eta^2$ is $\exp(h_T+\sigma_\eta^2/2)$. Using $\exp(h_T)$ would omit the first forecast state innovation.
 
 ## Inference approach (KSC mixture)
 

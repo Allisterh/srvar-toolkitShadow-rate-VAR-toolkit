@@ -97,7 +97,7 @@ The toolkit is designed for researchers and practitioners who need transparent, 
 | **Variable Selection (SSVS)** | Spike-and-slab inclusion indicators for stochastic search | `PriorSpec.from_ssvs(...)` | Supported |
 | **Bayesian LASSO (BLASSO)** | Bayesian LASSO shrinkage prior for VAR coefficients (global or adaptive) | `PriorSpec.from_blasso(...)` | Supported |
 | **Shadow-Rate / ELB** | Latent shadow-rate sampling at the effective lower bound | `ModelSpec(elb=ElbSpec(...))` | Supported |
-| **Stochastic Volatility** | Diagonal SV with RW/AR(1) state dynamics; optional triangular covariance (time-invariant correlations); optional factor SV (full time-varying covariance; v1: NIW+RW) | `ModelSpec(volatility=VolatilitySpec(...))` | Supported |
+| **Stochastic Volatility** | Diagonal SV with RW/AR(1) state dynamics; optional triangular covariance (fixed factor; generally time-varying correlations); optional factor SV (full time-varying covariance; v1: NIW+RW) | `ModelSpec(volatility=VolatilitySpec(...))` | Supported |
 | **Combined ELB + SV** | Joint shadow-rate and stochastic volatility model | `ModelSpec(elb=..., volatility=...)` | Supported |
 | **Robust Shocks** | Student‑t and outlier-mixture innovations (homoskedastic VARs; factor SV supported) | `ModelSpec(shocks=ShockSpec(...))` | Supported |
 | **Steady-State VAR (SSP)** | Parameterize the VAR intercept via a steady-state mean `mu` (optional mu-SSVS) | `ModelSpec(steady_state=SteadyStateSpec(...))` | Supported |
@@ -272,6 +272,16 @@ fc = forecast(fit_res, horizons=[1, 4], draws=200)
 print(fc.mean)
 ```
 
+### Correctness changes in the unreleased version
+
+Sampler and forecast corrections change numerical results and seeded random-number sequences. Refit affected DL, canonical Minnesota and triangular SV models, and regenerate SV/ELB forecasts and forecast comparisons. Censored terminal ELB histories require paired retained latent draws; constrained scenarios require Gaussian shocks. See [MCMC semantics](docs/theory/mcmc.md), [forecast timing](docs/theory/stochastic-volatility.md) and [release notes](CHANGELOG.md).
+
+These fixes have targeted numerical checks. Human scientific review, full simulation-based calibration and empirical replication remain separate requirements before substantive use.
+
+Prior choices remain separate from transition correctness. Homoskedastic DL currently defaults to `IG(N + 2, 1)`, while triangular SV uses the legacy Minnesota `v0` without its dependent-variable covariance scaling. Neither inherited choice is endorsed as the intended scientific prior. The [MCMC semantics](docs/theory/mcmc.md) explain the exact defaults, the triangular limitation and the separately required prior repairs. No empirical or replication claim follows from the component checks.
+
+Reproducible component calibration, local benchmark comparisons and multi-chain diagnostic commands are documented in [Statistical qualification studies](docs/theory/qualification.md). These studies record source fingerprints and diagnostic failures; component checks do not certify every model family.
+
 ### Labeled outputs (`xarray` / ArviZ)
 
 Optional labeled outputs are available via `srvar.xarray` and `srvar.arviz` (see `srvar/xarray.py`
@@ -290,7 +300,7 @@ Conventions:
   because these states are defined on the effective sample `T - p`.
 - For factor SV, `ds_fit["loadings"]` is an alias of `ds_fit["lambda"]`.
 
-ArviZ (`InferenceData`) integration:
+ArviZ (`InferenceData`) integration supports `arviz>=0.17,<1`. ArviZ 1.x uses a different output interface and is not supported by these converters:
 
 ```python
 from srvar.arviz import fit_to_inferencedata
@@ -549,7 +559,7 @@ For full contributor guidelines (including docs builds, style, and testing expec
 ### Limitations and performance notes
 
 - This is currently an **alpha** research toolkit.
-- SV coverage is still evolving: diagonal SV, triangular covariance (time-invariant correlations), and factor SV (time-varying full covariance) are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
+- SV coverage is still evolving: diagonal SV, triangular covariance (fixed factor; generally time-varying correlations), and factor SV (time-varying full covariance) are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
 - MCMC runtime depends heavily on ``T``, ``N``, and sampler settings (draws/burn-in/thinning).
 - Backtests can stream `metrics.csv` without keeping all forecast draws in RAM (see `output.store_forecasts_in_memory`).
 - Stationarity conditioning is implemented as **rejection** of unstable coefficient draws; this can be expensive for weak priors (see `forecast.stationarity_max_draws` / `backtest.stationarity_max_draws`).

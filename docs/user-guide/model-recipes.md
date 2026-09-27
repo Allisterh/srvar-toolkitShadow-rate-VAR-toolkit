@@ -234,6 +234,7 @@ hd = historical_decomposition_cholesky(
 Notes:
 - The decomposition is computed for dates `t=p..T-1` (the first `p` observations are lag initial conditions).
 - For ELB models, this defaults to using the latent dataset (`fit_res.latent_dataset`) unless `use_latent=False`.
+- This conditions the decomposition on the final latent history; it does not integrate over posterior uncertainty in that history.
 
 ## 11) Conditional / scenario forecasting (hard constraints)
 
@@ -254,5 +255,6 @@ fc_cond = conditional_forecast(
 ```
 
 Notes:
-- This currently supports homoskedastic (time-invariant covariance) VARs.
+- Constraints require homoskedastic Gaussian VARs. Student-t and outlier-mixture constrained requests raise an error; empty constraints retain ordinary homoskedastic forecasting.
 - When ELB is enabled, constraints are applied to the latent (unfloored) process used for simulation.
+- Censored terminal lags require retained latent histories paired with the selected parameter draws.
