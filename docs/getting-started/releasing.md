@@ -58,8 +58,9 @@ Start the workflow at the tag itself—not from `main`—and give the same tag a
 gh workflow run release.yml --ref vX.Y.Z -f tag=vX.Y.Z -f confirm_publish=PUBLISH
 ```
 
-The workflow rejects a branch dispatch, a differing tag input, malformed tags, or any checkout that
-is not the selected tag commit. The `publish-pypi` job runs only for this manual confirmation, waits
+Normal publication rejects a differing tag input, malformed tags, or any checkout
+that is not the selected tag commit. Branch dispatch is rejected except for the
+explicit recovery path below. The `publish-pypi` job runs only for this manual confirmation, waits
 for the protected `pypi` Environment, downloads the validated artifact from its own build job, and
 uses a short-lived GitHub OIDC token as described in PyPI's
 [trusted publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publisher/). No tag-push
@@ -73,3 +74,25 @@ PyPI distributions cannot be replaced or routinely deleted after publication. If
 wrong, assess the impact, yank it where appropriate, publish a corrected higher version, and
 communicate the incident. Deleting or replacing the Git tag does not retract an installed PyPI
 distribution.
+
+## Recover publication without moving a tag
+
+If a tagged workflow cannot publish because its publishing tool is obsolete,
+review and merge the tooling repair on main. Keep the package tag immutable.
+Dispatch the repaired workflow from main with both the package tag and its exact
+approved 40-character commit SHA:
+
+```bash
+gh workflow run release.yml --ref main -f tag=vX.Y.Z \
+  -f expected_commit=FULL_APPROVED_COMMIT_SHA -f confirm_publish=PUBLISH
+```
+
+This recovery interface accepts only main or the selected tag as the workflow
+ref. Main requires expected_commit. The workflow checks out the package tag and
+verifies both its commit and the supplied SHA before tests or builds. The
+protected pypi environment and OIDC publishing job remain unchanged; inspect
+this run's artefacts before approving the environment. Arbitrary branches and
+short or mismatched commit identities are rejected.
+
+The publisher is pinned to v1.14.2, whose Twine 7 supports Core Metadata 2.5. See
+the [PyPA release notes](https://github.com/pypa/gh-action-pypi-publish/releases/tag/v1.14.2).
