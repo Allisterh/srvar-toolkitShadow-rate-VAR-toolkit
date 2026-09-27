@@ -116,3 +116,87 @@ def test_ci_exercises_optional_integrations() -> None:
     assert "xarray,arviz,accel" in optional
     assert "import arviz, numba, xarray" in optional
     assert "python -m pytest" in optional
+
+
+def _execute_body(index, *, cwd, env):
+    import os
+    import subprocess
+    import textwrap
+
+    return subprocess.run(
+        ["bash", "-e", "-c", textwrap.dedent(_run_bodies()[index])],
+        cwd=cwd,
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_dispatch_validation_executes_with_explicit_recovery_binding(tmp_path):
+    source = "c3cc59b06df3c86a9b1120db48dc68e6e7199144"
+    cases = [
+        ("push", "refs/tags/v0.4.0", "", "", True),
+        ("workflow_dispatch", "refs/tags/v0.4.0", "v0.4.0", "", True),
+        ("workflow_dispatch", "refs/heads/main", "v0.4.0", source, True),
+        ("workflow_dispatch", "refs/heads/main", "v0.4.0", "", False),
+        ("workflow_dispatch", "refs/heads/feature", "v0.4.0", source, False),
+        ("workflow_dispatch", "refs/tags/v0.3.1", "v0.4.0", source, False),
+        ("workflow_dispatch", "refs/heads/main", "v0.4.0", source[:7], False),
+        ("workflow_dispatch", "refs/heads/main", "v0.4.0", source.upper(), False),
+        ("workflow_dispatch", "refs/heads/main", "v0.4.0", "x" * 40, False),
+        ("workflow_dispatch", "refs/heads/main", "v0.4.0", source + "\n", False),
+        ("workflow_dispatch", "refs/heads/main", "v0.4.0\n", source, False),
+        ("push", "refs/heads/main", "v0.4.0", source, False),
+        ("pull_request", "refs/tags/v0.4.0", "v0.4.0", source, False),
+    ]
+    for index, (event, ref, tag, expected, accepted) in enumerate(cases):
+        output = tmp_path / f"output-{index}"
+        result = _execute_body(
+            0,
+            cwd=tmp_path,
+            env={
+                "EVENT_NAME": event,
+                "WORKFLOW_REF": ref,
+                "DISPATCH_TAG": tag,
+                "EXPECTED_COMMIT": expected,
+                "GITHUB_OUTPUT": str(output),
+            },
+        )
+        assert (result.returncode == 0) == accepted, (event, ref, result.stderr)
+        if accepted:
+            assert output.read_text().splitlines() == [
+                "tag=v0.4.0",
+                "version=0.4.0",
+                "artifact_name=python-distributions-v0.4.0",
+            ]
+        else:
+            assert not output.exists()
+
+
+def test_checkout_check_executes_against_real_tag_and_expected_commit(tmp_path):
+    import subprocess
+
+    def git(*args):
+        return subprocess.check_output(["git", *args], cwd=tmp_path, text=True).strip()
+
+    git("init", "-q")
+    commit = [
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-q",
+        "--allow-empty",
+    ]
+    git(*commit, "-m", "approved source")
+    approved = git("rev-parse", "HEAD")
+    git("tag", "v0.4.0")
+    for expected, accepted in ((approved, True), ("", True), ("0" * 40, False)):
+        result = _execute_body(1, cwd=tmp_path, env={"TAG": "v0.4.0", "EXPECTED_COMMIT": expected})
+        assert (result.returncode == 0) == accepted
+    git(*commit, "-m", "different source")
+    other = git("rev-parse", "HEAD")
+    for expected in (approved, other, ""):
+        result = _execute_body(1, cwd=tmp_path, env={"TAG": "v0.4.0", "EXPECTED_COMMIT": expected})
+        assert result.returncode != 0

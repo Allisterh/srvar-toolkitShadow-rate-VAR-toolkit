@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Fixed
+
+- Publish Metadata 2.5 distributions with the SHA-pinned PyPA v1.14.2 action.
+  Recover an immutable tag from main only with its explicit full source commit;
+  retain tag-checkout verification and protected OIDC publication.
+
 ## [0.4.0] - 2026-09-27
 
 The maintainer approved the specified DL rate policy, public inference contracts

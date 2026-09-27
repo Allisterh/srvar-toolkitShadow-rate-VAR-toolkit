@@ -62,6 +62,10 @@ The toolkit is designed for researchers and practitioners who need transparent, 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+Release tooling can recover publication of an immutable tag from `main` only
+when supplied with the exact approved source commit. See the
+[release recovery procedure](docs/getting-started/releasing.md#recover-publication-without-moving-a-tag).
+
 ### 0.4.0 alpha candidate boundaries
 
 Bayesian LASSO inference, non-zero-mean SSVS/DL and ELB historical decomposition
