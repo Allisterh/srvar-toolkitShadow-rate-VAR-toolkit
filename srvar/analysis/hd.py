@@ -6,6 +6,7 @@ from typing import Any, Literal
 import numpy as np
 
 from ..bvar import sample_posterior_niw
+from ..inference_checks import validate_fit_for_inference
 from ..linalg import cholesky_jitter
 from ..results import FitResult, HistoricalDecompositionResult
 from ..var import design_matrix, is_stationary
@@ -79,11 +80,15 @@ def historical_decomposition_cholesky(
 
     Notes
     -----
-    - For ELB models, the VAR is defined on the latent shadow series. If `use_latent` is not
-      specified, this function defaults to using `fit.latent_dataset` when available.
+    - ELB models are rejected until decomposition uses paired posterior latent histories.
     - For volatility models, shocks are identified using the time-varying covariance state
       `Sigma_t` implied by `h_draws` (and `q_draws` for triangular covariance).
     """
+    if fit.model.elb is not None and fit.model.elb.enabled:
+        raise ValueError(
+            "ELB historical decomposition is disabled until posterior latent histories are paired"
+        )
+    validate_fit_for_inference(fit, require_volatility_innovations=False)
     if rng is None:
         rng = np.random.default_rng()
 

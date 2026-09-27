@@ -62,6 +62,22 @@ The toolkit is designed for researchers and practitioners who need transparent, 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+### 0.4.0 alpha candidate boundaries
+
+Bayesian LASSO inference, non-zero-mean SSVS/DL and ELB historical decomposition
+raise explicit errors. Shrinkage inference requires retained parameter states;
+DL/SSVS results have no analytic NIW posterior fallback. Prior constructors and
+raw artefact inspection remain available for provenance. Minnesota equation-wise
+metadata requires an NIW family even for custom priors. SV structural analysis
+uses retained volatility paths; forecasting also requires volatility-innovation
+variance draws.
+
+Full DL hierarchy calibration and stochastic-volatility convergence remain
+experimental. Component tests and passing CI do not establish empirical validity.
+The maintainer approved the specified DL rate policy and public inference
+contracts for 0.4.0 on 27 September 2026. This approval excludes full-model
+calibration and empirical claims. See [release scope](docs/user-guide/limitations.md).
+
 ### Built With
 
 [![Python][python-badge]][python-url]
@@ -92,12 +108,12 @@ The toolkit is designed for researchers and practitioners who need transparent, 
 |-----------|-------------|---------------|--------|
 | **Conjugate BVAR (NIW)** | Closed-form posterior updates and fast sampling for VAR coefficients/covariance | `PriorSpec.niw_default(...)` | Supported |
 | **Legacy Minnesota-style NIW shrinkage** | Historical Minnesota-style NIW construction (non-canonical; compatibility path) | `PriorSpec.niw_minnesota_legacy(...)` | Supported |
-| **Canonical Minnesota shrinkage** | Equation-wise Minnesota own-vs-cross shrinkage for homoskedastic and diagonal SV models | `PriorSpec.niw_minnesota_canonical(...)` or `prior.method: "minnesota_canonical"` | Supported (homo + diagonal SV) |
+| **Canonical Minnesota shrinkage** | Equation-wise Minnesota own-vs-cross shrinkage for homoskedastic, diagonal SV and triangular SV models | `PriorSpec.niw_minnesota_canonical(...)` or `prior.method: "minnesota_canonical"` | Supported (homo + diagonal/triangular SV) |
 | **Tempered Minnesota bridge** | Experimental geometric bridge between legacy and canonical Minnesota scaling | `PriorSpec.niw_minnesota_tempered(...)` or `prior.method: "minnesota_tempered"` | Experimental (diagonal SV only) |
 | **Variable Selection (SSVS)** | Spike-and-slab inclusion indicators for stochastic search | `PriorSpec.from_ssvs(...)` | Supported |
-| **Bayesian LASSO (BLASSO)** | Bayesian LASSO shrinkage prior for VAR coefficients (global or adaptive) | `PriorSpec.from_blasso(...)` | Supported |
+| **Bayesian LASSO (BLASSO)** | Bayesian LASSO shrinkage prior for VAR coefficients (global or adaptive) | `PriorSpec.from_blasso(...)` (provenance only) | Inference disabled |
 | **Shadow-Rate / ELB** | Latent shadow-rate sampling at the effective lower bound | `ModelSpec(elb=ElbSpec(...))` | Supported |
-| **Stochastic Volatility** | Diagonal SV with RW/AR(1) state dynamics; optional triangular covariance (time-invariant correlations); optional factor SV (full time-varying covariance; v1: NIW+RW) | `ModelSpec(volatility=VolatilitySpec(...))` | Supported |
+| **Stochastic Volatility** | Diagonal SV with RW/AR(1) state dynamics; optional triangular covariance (fixed factor; generally time-varying correlations); optional factor SV (full time-varying covariance; v1: NIW+RW) | `ModelSpec(volatility=VolatilitySpec(...))` | Supported |
 | **Combined ELB + SV** | Joint shadow-rate and stochastic volatility model | `ModelSpec(elb=..., volatility=...)` | Supported |
 | **Robust Shocks** | Student‑t and outlier-mixture innovations (homoskedastic VARs; factor SV supported) | `ModelSpec(shocks=ShockSpec(...))` | Supported |
 | **Steady-State VAR (SSP)** | Parameterize the VAR intercept via a steady-state mean `mu` (optional mu-SSVS) | `ModelSpec(steady_state=SteadyStateSpec(...))` | Supported |
@@ -272,6 +288,41 @@ fc = forecast(fit_res, horizons=[1, 4], draws=200)
 print(fc.mean)
 ```
 
+### Correctness changes in the unreleased version
+
+Sampler and forecast corrections change numerical results and seeded random-number sequences. Refit affected DL, canonical Minnesota and triangular SV models, and regenerate SV/ELB forecasts and forecast comparisons. Censored terminal ELB histories require paired retained latent draws; constrained scenarios require Gaussian shocks. See [MCMC semantics](docs/theory/mcmc.md), [forecast timing](docs/theory/stochastic-volatility.md) and [release notes](CHANGELOG.md).
+
+These fixes have targeted numerical checks. Human scientific review, full simulation-based calibration and empirical replication remain separate requirements before substantive use.
+
+Homoskedastic DL and canonical Minnesota now draw residual variances without
+clipping them to `[1e-12, 1e12]`. Invalid conditional parameters or non-finite,
+non-positive numerical draws fail explicitly. DL shrinkage safeguards remain unchanged; posterior clipping removal
+does not establish interval calibration of the full procedure.
+
+DL empirical-Bayes residual rates use normalised AR regressions without an absolute
+variance floor. They require positive residual degrees of freedom, full rank and
+numerically resolved residuals. DL `min_sigma2` has been removed; use saved rates
+in explicit mode to reproduce an earlier prior. Minnesota constructors retain
+their separate floor policy. The maintainer approved this rate-construction
+policy; full DL calibration and empirical claims remain unqualified.
+
+DL residual priors now require an explicit Python mode: `PriorSpec.from_dl(..., residual_prior="empirical_bayes", y=training_values, p=p)` uses `IG(2, sigma2_hat_i)`, while `residual_prior="explicit"` requires both `nu0` and diagonal `s0`. YAML defaults to empirical Bayes, estimated within each training window. Earlier default-configured DL runs used `IG(N + 2, 1)`; explicit overrides may have used other values. Triangular SV now accepts canonical Minnesota equation-specific precisions and rejects `minnesota_legacy`; custom shared Gaussian covariances remain supported. These changes alter the fitted models, so regenerate affected results in new output directories and obtain a separate scientific review. Component approval does not establish full-model convergence or empirical validity. See [MCMC semantics](docs/theory/mcmc.md) and the [configuration reference](docs/user-guide/configuration-reference.md).
+
+Dedicated [qualification tools](docs/theory/qualification.md) now measure fixed-DGP empirical-Bayes DL coverage and compare an isolated RW-SV state block with an enumerated mixture-model reference. Their outputs retain failures, diagnostic flags, prior parameters and exact source snapshots. Full-model calibration and substantive empirical claims require separate evidence.
+
+The paired DL control study crosses estimated versus known-DGP residual-prior
+rates with DL versus fixed Gaussian coefficient priors on identical datasets.
+It retains raw chains, per-arm failures and paired uncertainty estimates to
+investigate coverage failures without changing production samplers. See the
+[study controls and interpretation](docs/theory/qualification.md#paired-residual-prior-and-shrinkage-controls).
+
+Optional unfloored-rate controls separate estimation from the residual-prior
+floor. A Gaussian unit study transforms data, coefficient priors, IG rates and
+initial variances together, then compares posterior draws in common units.
+Both tools retain raw draws and source manifests for a separate scientific review.
+
+Reproducible component calibration, local benchmark comparisons and multi-chain diagnostic commands are documented in [Statistical qualification studies](docs/theory/qualification.md). These studies record source fingerprints and diagnostic failures; component checks do not certify every model family.
+
 ### Labeled outputs (`xarray` / ArviZ)
 
 Optional labeled outputs are available via `srvar.xarray` and `srvar.arviz` (see `srvar/xarray.py`
@@ -290,7 +341,7 @@ Conventions:
   because these states are defined on the effective sample `T - p`.
 - For factor SV, `ds_fit["loadings"]` is an alias of `ds_fit["lambda"]`.
 
-ArviZ (`InferenceData`) integration:
+ArviZ (`InferenceData`) integration supports `arviz>=0.17,<1`. ArviZ 1.x uses a different output interface and is not supported by these converters:
 
 ```python
 from srvar.arviz import fit_to_inferencedata
@@ -435,10 +486,16 @@ from srvar.artifacts import load_run_dir
 fit_res = load_run_dir("outputs/my_run")
 ```
 
-New artifacts do not require pickle deserialisation. Artifacts written before the format migration
-need `allow_legacy_pickle=True` and must only be loaded when their source and integrity are trusted;
-that option can execute pickle code. See the [artifact reference](docs/reference/artifacts.md) for
-the migration details.
+New fit artifacts use format version 2 and retain the resolved prior and constructor provenance.
+`load_run_dir` restores that prior directly; it does not recompute it from the configuration's
+prior section or current defaults. Model and sampler settings still come from `config.yml`.
+Forecast artifacts remain version 1. Neither format requires pickle deserialisation.
+
+Older fit files without a saved prior can be inspected with `load_fit_npz`, but `load_run_dir`
+rejects them rather than inventing a target model. Regenerate runs using verified explicit priors
+to produce version-2 artifacts. Raw files predating the safe format require the explicit
+`allow_legacy_pickle=True` option and a trusted source; that option can execute pickle code.
+See the [artifact reference](docs/reference/artifacts.md) for the compatibility boundary.
 
 For an end-to-end example (fit → IRF/FEVD/HD, including factor SV), see
 `examples/fsv_structural_analysis.py`.
@@ -549,7 +606,7 @@ For full contributor guidelines (including docs builds, style, and testing expec
 ### Limitations and performance notes
 
 - This is currently an **alpha** research toolkit.
-- SV coverage is still evolving: diagonal SV, triangular covariance (time-invariant correlations), and factor SV (time-varying full covariance) are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
+- SV coverage is still evolving: diagonal SV, triangular covariance (fixed factor; generally time-varying correlations), and factor SV (time-varying full covariance) are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
 - MCMC runtime depends heavily on ``T``, ``N``, and sampler settings (draws/burn-in/thinning).
 - Backtests can stream `metrics.csv` without keeping all forecast draws in RAM (see `output.store_forecasts_in_memory`).
 - Stationarity conditioning is implemented as **rejection** of unstable coefficient draws; this can be expensive for weak priors (see `forecast.stationarity_max_draws` / `backtest.stationarity_max_draws`).
@@ -602,7 +659,7 @@ If you use **srvar-toolkit** in your research, please cite both the software and
   title        = {srvar-toolkit: Shadow-Rate VAR Toolkit for Python},
   year         = {2026},
   url          = {https://github.com/shawcharles/srvar-toolkit},
-  version      = {0.3.1}
+  version      = {0.4.0}
 }
 ```
 

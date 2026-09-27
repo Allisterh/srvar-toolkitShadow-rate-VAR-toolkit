@@ -35,6 +35,9 @@ class FitResult:
     - Stochastic volatility state draws when volatility is enabled
     - SSVS inclusion indicator draws when ``prior.family='ssvs'``
 
+    DL/SSVS results always set ``posterior=None`` because their last conditional
+    NIW block is not an analytic marginal posterior. Inference requires retained draws.
+
     """
 
     dataset: Dataset
@@ -61,6 +64,11 @@ class FitResult:
     gamma_draws: np.ndarray | None = None  # (D, K)
     mu_draws: np.ndarray | None = None  # (D, N)
     mu_gamma_draws: np.ndarray | None = None  # (D, N)
+
+    def __post_init__(self) -> None:
+        # A last conditional NIW block is not the marginal shrinkage posterior.
+        if self.prior.family.lower() in {"ssvs", "dl"}:
+            object.__setattr__(self, "posterior", None)
 
     @property
     def loading_draws(self) -> np.ndarray | None:

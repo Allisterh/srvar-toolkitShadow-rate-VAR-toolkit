@@ -319,7 +319,7 @@ def test_legacy_paths_do_not_call_v1_validators(
     def fail(*args, **kwargs):
         raise AssertionError("v1 validator must not run for markerless legacy artifacts")
 
-    monkeypatch.setattr(artifacts, "_validate_fit_v1_payload", fail)
+    monkeypatch.setattr(artifacts, "_validate_fit_payload", fail)
     monkeypatch.setattr(artifacts, "_validate_forecast_v1_payload", fail)
 
     assert load_fit_npz(fit_path, allow_legacy_pickle=True).dataset.variables == ["y"]

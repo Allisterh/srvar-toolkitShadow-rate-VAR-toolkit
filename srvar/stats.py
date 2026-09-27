@@ -26,7 +26,9 @@ def newey_west_long_run_variance(x: np.ndarray, *, max_lag: int) -> float:
     Parameters
     ----------
     x:
-        1D array-like time series. NaNs are removed.
+        1D array-like time series. Non-finite values are removed and the retained
+        observations are centred. Each lagged cross-product is divided by the
+        total retained sample size. Removal compresses time gaps.
     max_lag:
         Maximum lag for HAC estimation. Must be >= 0.
     """
@@ -37,6 +39,7 @@ def newey_west_long_run_variance(x: np.ndarray, *, max_lag: int) -> float:
         return float("nan")
     if max_lag < 0:
         raise ValueError("max_lag must be >= 0")
+    v = v - v.mean()
     if max_lag == 0:
         return float(np.mean(v * v))
 
@@ -46,9 +49,15 @@ def newey_west_long_run_variance(x: np.ndarray, *, max_lag: int) -> float:
 
     for k in range(1, L + 1):
         w = 1.0 - (k / float(L + 1))
-        cov = float(np.mean(v[k:] * v[:-k]))
+        cov = float(np.sum(v[k:] * v[:-k]) / n)
         lrv += 2.0 * w * cov
 
+    # The Bartlett estimator is non-negative in exact arithmetic.
+    tolerance = 10.0 * np.finfo(float).eps * (L + 1) * gamma0
+    if lrv < -tolerance:
+        raise FloatingPointError(
+            "Bartlett long-run variance is negative beyond round-off tolerance"
+        )
     return float(max(lrv, 0.0))
 
 

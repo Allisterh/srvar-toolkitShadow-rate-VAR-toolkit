@@ -6,6 +6,66 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+The maintainer approved the specified DL rate policy, public inference contracts
+and release tag on 27 September 2026. PyPI publication requires a separate
+decision. The approved pre-1.0 minor version contains breaking changes; approval
+does not establish full-model calibration or empirical validity.
+
+### Breaking changes
+
+- Bayesian LASSO inference is disabled pending repair of its scale conditional.
+  SSVS/DL reject non-zero prior means. Choose a supported prior and refit.
+- SSVS/DL require retained parameter draws and expose `posterior=None`.
+  Forecasts and structural analysis reject missing shrinkage states instead of
+  substituting an analytic NIW posterior. Use `burn_in < draws` and refit.
+- ELB Cholesky historical decomposition is disabled until posterior latent
+  histories are paired. `use_latent=False` does not bypass this restriction.
+- DL Python construction requires a residual-prior mode. Empirical Bayes uses
+  training-window IG(2, AR residual variance), with normalised regressions and
+  no absolute floor. Invalid or numerically unresolved regressions fail.
+  DL `min_sigma2` is removed; use explicit saved shape/rates to reproduce old
+  targets. YAML defaults to empirical Bayes. Minnesota floors are unchanged.
+- Canonical Minnesota supplies equation-specific triangular SV precisions;
+  legacy Minnesota is rejected on that path. Custom shared Gaussian priors
+  remain supported. Factor/tempered restrictions are retained.
+- Fit writers emit schema version 2 with the complete resolved prior.
+  `load_run_dir` restores that prior and rejects old runs without it;
+  `load_fit_npz` remains available for supported raw archive inspection.
+- Numerical outputs and seeded sequences change. Refit affected models and
+  regenerate forecasts and comparisons in new directories. Censored terminal
+  ELB lags require retained latent histories paired with parameter draws.
+
+### Fixed
+
+- Reject Minnesota metadata on custom shrinkage priors before it can select
+  an incompatible sampler. Custom NIW equation-wise priors remain supported.
+- Require SV innovation-variance draws for forecasts, while allowing IRF, FEVD
+  and historical decomposition from retained coefficients and volatility paths.
+- Retain variance state between homoskedastic coefficient updates; remove
+  clipping of inverse-gamma residual draws and reject invalid numerical draws.
+- Include coupled likelihood terms in triangular SV coefficient Gibbs updates.
+- Advance volatility before each forecast observation and preserve paired
+  terminal ELB histories through stationarity filtering and ensemble pooling.
+- Reject constrained robust-shock scenarios that would substitute Gaussian shocks.
+- Centre scalar Newey-West inputs and normalise lagged products consistently.
+- Bound the ArviZ extra to the supported InferenceData interface.
+
+### Added
+
+- Reproducible component, coverage, prior-control, unit-transformation and SV
+  diagnostic studies with raw evidence and exact source snapshots. Coverage
+  records identify the rate policy; archived studies retain their original targets.
+- CI coverage for xarray, ArviZ and Numba and tests at the exact release tag.
+
+### Scientific scope
+
+Full DL hierarchy calibration, triangular-SV convergence and empirical or
+replication claims remain unqualified. Structural identification and other
+model-specific assumptions require their own review. Earlier component approval
+does not approve later prior changes. See the documented release boundaries.
+
 ## [0.3.1] - 2026-07-18
 
 ### Added

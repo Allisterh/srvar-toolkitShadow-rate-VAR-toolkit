@@ -18,7 +18,14 @@ def test_dl_runs_no_elb() -> None:
     model = ModelSpec(p=1, include_intercept=True)
     k = 1 + ds.N * model.p
 
-    prior = PriorSpec.from_dl(k=k, n=ds.N, include_intercept=True)
+    prior = PriorSpec.from_dl(
+        k=k,
+        n=ds.N,
+        residual_prior="explicit",
+        nu0=ds.N + 2,
+        s0=np.eye(ds.N),
+        include_intercept=True,
+    )
     sampler = SamplerConfig(draws=120, burn_in=20, thin=2)
 
     fit_res = fit(ds, model, prior, sampler, rng=np.random.default_rng(999))
@@ -36,7 +43,14 @@ def test_dl_sv_runs() -> None:
     model = ModelSpec(p=1, include_intercept=True, volatility=VolatilitySpec())
     k = 1 + ds.N * model.p
 
-    prior = PriorSpec.from_dl(k=k, n=ds.N, include_intercept=True)
+    prior = PriorSpec.from_dl(
+        k=k,
+        n=ds.N,
+        residual_prior="explicit",
+        nu0=ds.N + 2,
+        s0=np.eye(ds.N),
+        include_intercept=True,
+    )
     sampler = SamplerConfig(draws=100, burn_in=20, thin=2)
 
     fit_res = fit(ds, model, prior, sampler, rng=np.random.default_rng(111))
@@ -78,7 +92,14 @@ def test_dl_elb_runs() -> None:
 
     model = ModelSpec(p=1, include_intercept=True, elb=ElbSpec(bound=elb_bound, applies_to=["r"]))
     k = 1 + ds.N * model.p
-    prior = PriorSpec.from_dl(k=k, n=ds.N, include_intercept=True)
+    prior = PriorSpec.from_dl(
+        k=k,
+        n=ds.N,
+        residual_prior="explicit",
+        nu0=ds.N + 2,
+        s0=np.eye(ds.N),
+        include_intercept=True,
+    )
     sampler = SamplerConfig(draws=100, burn_in=20, thin=2)
 
     fit_res = fit(ds, model, prior, sampler, rng=np.random.default_rng(777))

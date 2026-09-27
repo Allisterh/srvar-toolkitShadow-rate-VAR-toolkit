@@ -1,7 +1,24 @@
 import numpy as np
 import pytest
 
-from srvar.stats import diebold_mariano_test, newey_west_long_run_variance
+from srvar.stats import (
+    diebold_mariano_test,
+    newey_west_covariance_matrix,
+    newey_west_long_run_variance,
+)
+
+
+def test_hac_uses_common_sample_size_for_lagged_products():
+    assert newey_west_long_run_variance(np.array([-1.0, 2.0, -1.0]), max_lag=2) == pytest.approx(
+        4.0 / 9.0
+    )
+
+
+@pytest.mark.parametrize("lag", [0, 1, 4, 100])
+def test_scalar_hac_matches_matrix_hac_and_centres_input(lag):
+    x = np.random.default_rng(173).normal(size=30) + 12.0
+    expected = newey_west_covariance_matrix(x, nlags=lag)[0, 0]
+    assert newey_west_long_run_variance(x, max_lag=lag) == pytest.approx(expected)
 
 
 def test_newey_west_long_run_variance_zero_for_zero_series() -> None:

@@ -77,7 +77,7 @@ model:
 
     # Residual covariance:
     # - "diagonal": independent shocks
-    # - "triangular": time-invariant correlation structure (CCC-style)
+    # - "triangular": fixed triangular factor; generally time-varying correlations
     # - "factor": factor stochastic volatility (full, time-varying covariance; v1: NIW + RW only)
     covariance: "diagonal"         # optional (default: "diagonal")
     q_prior_var: 1.0               # optional (default: 1.0; required positive for triangular)
@@ -189,6 +189,7 @@ prior:
 Notes:
 - `method: "minnesota"` remains supported as a backward-compatible alias for `method: "minnesota_legacy"`.
 - `method: "minnesota_legacy"` is the compatibility path and remains the default NIW shrinkage option.
+- Triangular SV rejects this legacy mapping and its `minnesota` alias. Use `minnesota_canonical` for equation-specific covariance scaling; see {doc}`../theory/mcmc`.
 
 ### NIW canonical Minnesota shrinkage
 
@@ -208,8 +209,8 @@ prior:
 
 Notes:
 - `method: "minnesota_canonical"` uses equation-specific own-vs-cross shrinkage.
-- It currently supports homoskedastic models and diagonal stochastic volatility only.
-- Triangular SV and factor SV must continue to use the legacy NIW path.
+- It supports homoskedastic models and diagonal or triangular stochastic volatility (RW/AR(1), including ELB).
+- Factor SV still rejects canonical Minnesota. Tempered priors and steady-state models remain unsupported for triangular SV.
 
 ### NIW tempered Minnesota bridge
 
@@ -249,6 +250,10 @@ prior:
 
 ### Bayesian LASSO (BLASSO)
 
+This schema remains readable for historical provenance, but fitting and inference
+are disabled pending repair of the scale conditional. Use a supported prior for
+new fits. SSVS/DL likewise reject non-zero coefficient-prior means.
+
 ```yaml
 prior:
   family: "blasso"
@@ -272,7 +277,23 @@ prior:
   dl:
     abeta: 0.5                     # optional
     dl_scaler: 0.1                 # optional
+    residual_prior: empirical_bayes # default; uses this fit's training window
 ```
+
+For homoskedastic DL, empirical-Bayes mode uses $IG(2,\widehat{\sigma}_i^2)$ from univariate AR(p) residuals within each training window. The model supplies p and the intercept setting. No explicit shape/rate overrides are allowed in this mode. Unknown DL keys are rejected.
+
+To specify fixed IG shape and rates for a two-equation model:
+
+```yaml
+prior:
+  family: dl
+  dl:
+    residual_prior: explicit
+    nu0: 3.0
+    s0: [[2.0, 0.0], [0.0, 8.0]]
+```
+
+Explicit mode requires both parameters. DL no longer accepts `min_sigma2` in either mode. Empirical-Bayes rates use normalised auxiliary AR regressions without an absolute floor; they require positive residual degrees of freedom, a full-rank design and residuals above numerical resolution. Invalid or nonrepresentable rates raise an error rather than substituting a floor. Use a longer identified training window or supply an explicitly justified proper prior. This change does not alter Minnesota's separate `min_sigma2` option. The Python API requires a mode: use `residual_prior="empirical_bayes", y=training_values, p=p`, or `residual_prior="explicit", nu0=..., s0=...`. It no longer silently supplies $IG(N+2,1)$. To reproduce that old default deliberately, pass `nu0=N+2, s0=np.eye(N)` in explicit mode. Regenerate affected outputs in new directories. SV uses its own volatility state prior; these IG parameters describe homoskedastic residual variances. See {doc}`../theory/mcmc` for qualification limits.
 
 ## `sampler`
 

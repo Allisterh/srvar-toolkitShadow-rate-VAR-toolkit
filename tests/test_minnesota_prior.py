@@ -338,7 +338,7 @@ def test_minnesota_canonical_rejects_unsupported_sv_covariance_in_config_and_api
     model = ModelSpec(
         p=1,
         include_intercept=True,
-        volatility=VolatilitySpec(enabled=True, covariance="triangular"),
+        volatility=VolatilitySpec(enabled=True, covariance="factor"),
     )
     cfg = {
         "prior": {

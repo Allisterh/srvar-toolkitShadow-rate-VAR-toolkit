@@ -89,11 +89,18 @@ jobs:
       - name: Install release tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ".[dev]"
+          python -m pip install ".[dev,cli,fred,plot,excel,xarray,arviz,accel]"
       - name: Validate release metadata
         env:
           TAG: ${{ steps.validated-ref.outputs.tag }}
         run: python scripts/release_preflight.py --tag "$TAG"
+      - name: Test selected tag with optional integrations
+        env:
+          OPENBLAS_NUM_THREADS: "1"
+          OMP_NUM_THREADS: "1"
+        run: |
+          python -c 'import arviz, numba, xarray; from srvar import sv; assert sv._HAVE_NUMBA'
+          python -m pytest
       - name: Build and validate distributions
         env:
           TAG: ${{ steps.validated-ref.outputs.tag }}

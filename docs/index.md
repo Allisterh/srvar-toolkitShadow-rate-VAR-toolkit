@@ -119,6 +119,7 @@ theory/elb
 theory/stochastic-volatility
 theory/variable-selection
 theory/mcmc
+theory/qualification
 ```
 
 ```{toctree}

@@ -129,8 +129,13 @@ This writes `fit_coefficient_summary.csv` and `fit_coefficient_summary.md` with 
 central quantiles, sign probabilities, and simple overlap/flip diagnostics. Optional detail
 outputs can be requested to export the long-format draw table.
 
-The three comparison scripts above read saved artifacts strictly by default. If you need to
-compare artifacts written before the safe format migration, append `--allow-legacy-pickle` to the
+The three comparison scripts above read saved artifacts strictly by default. The coefficient
+comparison requires version-2 fits with saved priors because it reconstructs complete runs.
+Regenerate older runs with verified priors before using that script; the pickle flag does not
+recover missing prior metadata. Raw coefficient draws remain available through `load_fit_npz`.
+
+For the two forecast comparison scripts, if you need to compare artifacts written before the
+safe format migration, append `--allow-legacy-pickle` to the
 relevant command. Do this only once you have verified the artifacts' source and integrity: the
 flag can execute pickle code. For example:
 
@@ -145,10 +150,6 @@ python scripts/compare_forecast_means_to_realized.py \
   outputs/trusted_old_bundle/candidate \
   --allow-legacy-pickle
 
-python scripts/compare_fit_coefficients.py \
-  outputs/trusted_old_bundle/baseline \
-  outputs/trusted_old_bundle/candidate \
-  --allow-legacy-pickle
 ```
 
 To inspect the prior-scale driver directly at one scheduled origin, compare the legacy and

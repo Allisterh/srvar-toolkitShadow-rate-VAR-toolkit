@@ -40,6 +40,30 @@ jobs:
       - name: Test
         run: pytest
 
+  optional-integrations:
+    name: Optional integrations (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install project with optional integrations
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,cli,fred,plot,excel,xarray,arviz,accel]"
+      - name: Test optional integrations
+        env:
+          OPENBLAS_NUM_THREADS: "1"
+          OMP_NUM_THREADS: "1"
+        run: |
+          python -c 'import arviz, numba, xarray; from srvar import sv; assert sv._HAVE_NUMBA'
+          python -m pytest
+
   docs:
     name: Documentation (Python 3.11)
     runs-on: ubuntu-latest

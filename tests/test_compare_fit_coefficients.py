@@ -179,7 +179,9 @@ def test_compare_fit_coefficients_legacy_flag_is_explicit(tmp_path: Path) -> Non
     assert rejected.returncode != 0
     assert "legacy pickle-backed" in rejected.stderr
 
-    completed = subprocess.run(
-        [*command, "--allow-legacy-pickle"], check=True, capture_output=True, text=True
+    missing_prior = subprocess.run(
+        [*command, "--allow-legacy-pickle"], capture_output=True, text=True
     )
-    assert "wrote_csv=" in completed.stdout
+    assert missing_prior.returncode != 0
+    assert "run has no saved prior" in missing_prior.stderr
+    assert "wrote_csv=" not in missing_prior.stdout

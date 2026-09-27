@@ -26,11 +26,11 @@ Good starting points:
 - `config/minimal_config.yaml`
 - `config/demo_config.yaml`
 
-## 2) Legacy Minnesota-style shrinkage + stochastic volatility (linear SV benchmark)
+## 2) Canonical Minnesota shrinkage + stochastic volatility (linear SV benchmark)
 
 Use SV when forecast uncertainty changes over time.
 
-If you want equation-specific canonical Minnesota shrinkage instead, switch to:
+Select equation-specific canonical Minnesota shrinkage:
 
 ```yaml
 prior:
@@ -38,8 +38,8 @@ prior:
   method: "minnesota_canonical"
 ```
 
-Use that canonical path only for homoskedastic models and diagonal SV. Triangular and factor SV
-should stay on `method: "minnesota_legacy"`.
+The canonical path supports homoskedastic, diagonal SV and triangular SV models.
+Triangular SV rejects `minnesota_legacy`; factor SV still rejects canonical Minnesota.
 
 For a bounded experimental bridge on diagonal SV, use:
 
@@ -62,6 +62,9 @@ model:
     dynamics: "ar1"
     covariance: "triangular"
     q_prior_var: 1.0
+prior:
+  family: "niw"
+  method: "minnesota_canonical"
 ```
 
 Example:
@@ -122,16 +125,8 @@ prior:
     fix_intercept: true
 ```
 
-Bayesian LASSO:
-
-```yaml
-prior:
-  family: "blasso"
-  blasso:
-    mode: "global"
-    tau_init: 10000
-    lambda_init: 2.0
-```
+Bayesian LASSO inference is disabled pending a conditional-distribution repair.
+Use a supported prior; constructing a LASSO prior for provenance does not enable fitting.
 
 Dirichlet–Laplace:
 
@@ -233,7 +228,8 @@ hd = historical_decomposition_cholesky(
 
 Notes:
 - The decomposition is computed for dates `t=p..T-1` (the first `p` observations are lag initial conditions).
-- For ELB models, this defaults to using the latent dataset (`fit_res.latent_dataset`) unless `use_latent=False`.
+- ELB models are rejected until historical decomposition pairs latent histories with parameter draws.
+- This conditions the decomposition on the final latent history; it does not integrate over posterior uncertainty in that history.
 
 ## 11) Conditional / scenario forecasting (hard constraints)
 
@@ -254,5 +250,6 @@ fc_cond = conditional_forecast(
 ```
 
 Notes:
-- This currently supports homoskedastic (time-invariant covariance) VARs.
+- Constraints require homoskedastic Gaussian VARs. Student-t and outlier-mixture constrained requests raise an error; empty constraints retain ordinary homoskedastic forecasting.
 - When ELB is enabled, constraints are applied to the latent (unfloored) process used for simulation.
+- Censored terminal lags require retained latent histories paired with the selected parameter draws.

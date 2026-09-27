@@ -91,12 +91,12 @@ Use NIW when you want fast, stable inference and do not need variable selection.
 
 - Use `PriorSpec.niw_default(k=..., n=...)` for a simple default prior.
 - Use `PriorSpec.niw_minnesota_legacy(p=..., y=..., include_intercept=...)` for the current legacy Minnesota-style NIW shrinkage path.
-- Use `PriorSpec.niw_minnesota_canonical(p=..., y=..., include_intercept=...)` when you need equation-specific own-vs-cross Minnesota shrinkage and the model is homoskedastic or diagonal SV.
+- Use `PriorSpec.niw_minnesota_canonical(p=..., y=..., include_intercept=...)` when you need equation-specific own-vs-cross Minnesota shrinkage and the model is homoskedastic, diagonal SV or triangular SV.
 - Use `PriorSpec.niw_minnesota_tempered(p=..., y=..., include_intercept=..., alpha=0.25)` when you want the experimental legacy-to-canonical bridge on diagonal SV.
 
 `PriorSpec.niw_minnesota(...)` is kept as a backward-compatible alias for
 `PriorSpec.niw_minnesota_legacy(...)`. `PriorSpec.niw_minnesota_canonical(...)` is an explicit
-opt-in path; triangular and factor SV remain on the legacy NIW implementation.
+opt-in path; triangular SV now rejects legacy Minnesota, while factor SV still rejects canonical Minnesota.
 `PriorSpec.niw_minnesota_tempered(...)` is also opt-in, experimental, and currently restricted
 to diagonal stochastic volatility.
 
@@ -128,7 +128,8 @@ prior:
 
 Use DL when you want global–local shrinkage over individual VAR coefficients.
 
-- Use `PriorSpec.from_dl(k=..., n=..., include_intercept=...)`.
+- Use `PriorSpec.from_dl(k=..., n=..., residual_prior="empirical_bayes", y=training_values, p=..., include_intercept=...)`, or select `residual_prior="explicit"` with both `nu0` and diagonal `s0`. Empirical-Bayes rates now use normalised AR regressions without an absolute floor. DL `min_sigma2` is removed; invalid auxiliary regressions raise an error. Use saved explicit rates to reproduce an earlier target.
+- YAML defaults to empirical Bayes within each training window. The implicit Python IG(N+2, 1) default has been removed; see the [configuration reference](configuration-reference.md) for migration.
 
 YAML example:
 

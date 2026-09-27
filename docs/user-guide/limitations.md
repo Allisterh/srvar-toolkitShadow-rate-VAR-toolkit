@@ -2,18 +2,36 @@
 
 This project targets transparency and reproducibility and is currently in an **alpha** stage.
 
+## Enforced inference boundaries
+
+Bayesian LASSO fitting and inference on its archived fits raise errors because
+its scale conditional needs repair. SSVS/DL require zero coefficient-prior means
+and retained posterior draws. Their `FitResult.posterior` is always `None`;
+forecasting and analysis cannot substitute a conditional NIW block. Conjugate
+NIW analytic inference remains available. Raw artefact inspection and prior
+construction do not imply that inference with those objects is supported.
+
+ELB Cholesky historical decomposition raises an error until latent histories are
+paired with parameter draws. Neither `use_latent=True` nor `False` bypasses it.
+Full DL hierarchy and SV fits remain experimental: diagnostics and component
+checks do not establish calibration or empirical validity. The maintainer approved
+the specified DL rate-construction policy and public inference contracts for
+0.4.0 on 27 September 2026; that decision does not extend to these broader claims.
+
 ## Modeling limitations
 
-- **Stochastic volatility coverage is still evolving**: diagonal SV, triangular (time-invariant correlation) SV, and factor SV (time-varying full covariance) are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
+- **Stochastic volatility coverage is still evolving**: diagonal SV, triangular SV with a fixed factor and generally time-varying correlations, and factor SV are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
 - **Structural analysis coverage is partial**: reduced-form, Cholesky, and sign-restricted IRFs are supported via `srvar.analysis` (plus FEVD and Cholesky historical decompositions), but other workflows (e.g. sign-restricted historical decompositions) are not yet first-class.
-- **Conditional/scenario forecasts are limited**: `srvar.scenario.conditional_forecast` currently supports homoskedastic VARs. For ELB models, conditioning is applied to the latent (unfloored) process.
+- **Conditional/scenario forecasts are limited**: constraints in `srvar.scenario.conditional_forecast` require homoskedastic Gaussian VARs. Constrained Student-t and outlier-mixture models raise an error because Gaussian conditioning would change the model. Empty constraints delegate to ordinary forecasting for homoskedastic models. For ELB models, conditioning is applied to the latent (unfloored) process.
 - **ELB treatment**: ELB handling is implemented via latent shadow-rate augmentation for selected series.
 - **Robust shocks limitations**: Student‑t and outlier-mixture innovations are supported for homoskedastic VARs and for factor SV. They are not yet supported for diagonal/triangular SV; ELB/steady-state combinations require factor SV.
 
 ## Statistical limitations / caveats
 
-- **MCMC diagnostics are your responsibility**: the toolkit returns draws, but does not currently ship full diagnostic tooling (R-hat, ESS, trace diagnostics). You should validate convergence and mixing.
+- **MCMC diagnostics are your responsibility**: the toolkit returns draws and includes qualification scripts for R-hat and ESS. Diagnose each intended fit; passing thresholds does not prove the target is correct.
 - **Sensitivity to prior settings**: results can change meaningfully with Minnesota hyperparameters, SSVS spike/slab variances, and SV priors.
+- **Scientific review remains necessary**: the corrected sampler conditionals have analytical regression checks, but full simulation-based calibration and empirical replication remain outstanding. Bayesian LASSO and non-zero-mean shrinkage are disabled pending repair; see {doc}`../theory/mcmc`.
+- **ELB histories must remain paired**: censored terminal lags require retained latent histories aligned with parameter draws. Forecasts cannot substitute the last Gibbs history. ELB Cholesky historical decomposition is disabled because it does not yet integrate paired latent-history uncertainty.
 
 ## Performance considerations
 

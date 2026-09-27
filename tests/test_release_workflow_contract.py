@@ -96,3 +96,23 @@ def test_third_party_actions_are_full_sha_pinned() -> None:
     assert action_uses
     for use in action_uses:
         assert re.fullmatch(r"[-\w]+/[-\w]+@[0-9a-f]{40}", use), use
+
+
+def test_selected_release_commit_is_tested_before_build_and_upload() -> None:
+    checkout = TEXT.index("name: Verify checkout is the selected tag commit")
+    qualify = TEXT.index("name: Test selected tag with optional integrations")
+    build = TEXT.index("name: Build and validate distributions")
+    upload = TEXT.index("name: Upload validated distributions")
+    assert checkout < qualify < build < upload
+    qualification = TEXT[qualify:build]
+    assert "python -m pytest" in qualification
+    assert "import arviz, numba, xarray" in qualification
+    assert "continue-on-error" not in TEXT
+
+
+def test_ci_exercises_optional_integrations() -> None:
+    ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    optional = ci[ci.index("  optional-integrations:") :]
+    assert "xarray,arviz,accel" in optional
+    assert "import arviz, numba, xarray" in optional
+    assert "python -m pytest" in optional

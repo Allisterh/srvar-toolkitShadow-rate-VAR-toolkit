@@ -3,6 +3,16 @@
 Releases are built from a version tag and published only through GitHub Actions trusted publishing.
 Tag pushes build and retain distributions; they cannot publish a package to PyPI.
 
+## Current candidate
+
+Version 0.4.0 is an alpha candidate with explicitly authorised pre-1.0 breaking
+changes. The maintainer approved its specified DL rate policy, public inference
+contracts, integration and tag on 27 September 2026. PyPI publication remains a
+separate decision after inspection of the tag build. Approval excludes full-model
+calibration and empirical claims. Final-head CI must pass before integration.
+Enforced and experimental boundaries are listed in
+{doc}`../user-guide/limitations`.
+
 ## First-time administrator setup
 
 This repository cannot configure PyPI or GitHub protection by itself. Before the first release, a
@@ -34,7 +44,9 @@ password as a repository secret.
 
 3. Obtain review for the release commit. Create and push `vX.Y.Z` at that approved commit. An
    annotated or lightweight tag is accepted, but it must point at the approved commit.
-4. Inspect the tag-triggered workflow run. It must pass preflight, build exactly one wheel and one
+4. Inspect the tag-triggered workflow run. It must pass preflight and the full pytest suite at the
+   exact selected tag with xarray, ArviZ and Numba installed. Explicit import checks prevent
+   missing extras from silently skipping coverage. It must then build exactly one wheel and one
    source distribution, pass `twine check`, and import the installed wheel at the tagged version.
    Download the retained artifact if an independent inspection is needed.
 
