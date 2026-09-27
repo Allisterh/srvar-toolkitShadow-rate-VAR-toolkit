@@ -105,7 +105,7 @@ def test_all_failed_arms_remain_in_census_and_bounds():
     assert (interaction.failure_bound_high == 2).all()
 
 
-def test_raw_chains_pairing_and_exact_baseline_reproduction(tmp_path, monkeypatch):
+def test_raw_chains_pairing_and_exact_policy_reproduction(tmp_path, monkeypatch):
     pytest.importorskip("arviz")
     (tmp_path / "chains").mkdir()
     job = dict(out=str(tmp_path), cell_id=0, replicate=0, seed=17, chains=2, draws=20, warmup=10)
@@ -127,12 +127,20 @@ def test_raw_chains_pairing_and_exact_baseline_reproduction(tmp_path, monkeypatc
     partial = np.load(tmp_path / records[2]["partial_chain_file"], allow_pickle=False)
     assert partial["samples"].shape == (1, 20, 8)
     assert records[2]["completed_chains"] == 1
+    # The baseline uses current rates; historical EB controls preserve the old estimator.
+    policy_records = study.run_dataset(dict(job, policy_only=True))
+    assert [r["arm"] for r in policy_records] == ["dl_policy", "gaussian_policy"]
+    assert [r["status"] for r in policy_records] == ["ok", "ok"]
+    assert {r["data_sha256"] for r in records + policy_records} == {records[0]["data_sha256"]}
     reference = baseline.run_replication(job)
-    for row, expected in zip(records[0]["rows"], reference["rows"], strict=True):
+    np.testing.assert_array_equal(
+        np.diag(policy_records[0]["prior"]["niw"]["s0"]), reference["rates"]
+    )
+    for row, expected in zip(policy_records[0]["rows"], reference["rows"], strict=True):
         for key in ("posterior_mean", "lower90", "upper90", "rhat", "ess_bulk", "ess_tail"):
             np.testing.assert_allclose(row[key], expected[key], rtol=0, atol=0, equal_nan=True)
     data = np.load(tmp_path / "chains/short-0000-data.npz", allow_pickle=False)
-    for record in records:
+    for record in records + policy_records:
         if record["status"] == "ok":
             samples = np.load(tmp_path / record["chain_file"], allow_pickle=False)["samples"]
             assert samples.shape == (2, 20, 8)
