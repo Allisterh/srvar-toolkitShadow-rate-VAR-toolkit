@@ -21,6 +21,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Fixed
 
+- Remove post-draw residual-variance clipping in homoskedastic DL and canonical
+  Minnesota updates. Sample the IG conditional as rate divided by a unit Gamma
+  draw, and fail explicitly on invalid parameters or unrepresentable draws.
+  Return the diagonal covariance without an overflow-prone symmetric average.
+  Prior floors and shrinkage safeguards remain unchanged. Refit affected models
+  in fresh directories; boundary results and seeded rounding can change.
 - Retain residual variance state between coefficient updates in homoskedastic DL and
   canonical Minnesota samplers, including ELB and steady-state paths.
 - Include every coupled likelihood term in triangular SV coefficient Gibbs updates.

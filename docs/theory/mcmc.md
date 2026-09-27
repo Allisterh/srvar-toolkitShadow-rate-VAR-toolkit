@@ -53,6 +53,17 @@ The canonical Minnesota constructor supplies $IG(2,\widehat{\sigma}_i^2)$, where
 
 The coefficient conditional has precision $P_i=D_i+X'X/s_i$ and mean $P_i^{-1}(D_i m_i+X'y_i/s_i)$. The next variance is sampled from $IG(a_i+T_\mathrm{eff}/2,b_i+\lVert y_i-X\beta_i\rVert^2/2)$. Each iteration retains this variance for the next coefficient update. Resetting $s_i$ to a prior scale at every iteration does not target this joint posterior.
 
+The variance draw uses the posterior rate divided by a unit-scale Gamma draw.
+It has no imposed lower or upper bound. Earlier implementations clipped draws
+to $[10^{-12},10^{12}]$, introducing boundary atoms whenever clipping was active.
+Invalid conditional parameters raise `ValueError`; non-finite or non-positive
+numerical draws raise `FloatingPointError` instead of being replaced. Finite
+floating-point range still limits computation. This repair changes results at
+the former boundaries and can change seeded values through rounding, so refit
+affected models in fresh output directories. The empirical-Bayes prior-rate
+floor and the DL hierarchy's other safeguards remain separate; removing posterior
+clipping does not establish full-procedure interval calibration.
+
 DL updates its shrinkage precisions between coefficient updates; canonical Minnesota holds them fixed. The normal prior is independent of $s_i$, so the variance conditional contains no coefficient-prior quadratic term. This differs from the matrix-normal NIW model described above.
 
 ### Triangular SV coefficient sweep

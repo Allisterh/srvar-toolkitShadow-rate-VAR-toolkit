@@ -4,7 +4,7 @@ import numpy as np
 import scipy.linalg
 
 from .linalg import cholesky_jitter, solve_psd, symmetrize
-from .rng import gamma_rate, gig_rvs, inverse_gaussian
+from .rng import gig_rvs, inverse_gaussian
 
 
 def _dl_update(
@@ -99,6 +99,8 @@ def _dl_sample_beta_sigma(
     beta conditional on the current diagonal ``sigma``, then draw new variances
     conditional on beta. The caller must retain the returned sigma for the next
     iteration. This is also used by canonical Minnesota; it is not an NIW update.
+    Variances are unbounded positive draws. Invalid conditional parameters raise
+    ValueError; non-finite or non-positive numerical draws raise FloatingPointError.
 
     Indexing
     --------
@@ -155,12 +157,19 @@ def _dl_sample_beta_sigma(
     for i in range(n):
         shape = float(nu0 + t / 2.0)
         rate = float(s0t[i, i] + 0.5 * float(np.sum(resid[:, i] ** 2)))
-        sig2[i] = float(1.0 / gamma_rate(shape=shape, rate=rate, rng=rng))
-        sig2[i] = float(np.clip(sig2[i], 1e-12, 1e12))
+        if not np.isfinite(shape) or shape <= 0:
+            raise ValueError("variance conditional shape must be finite and positive")
+        if not np.isfinite(rate) or rate <= 0:
+            raise ValueError("variance conditional rate must be finite and positive")
+        # Rate / unit Gamma avoids 1/rate overflow and preserves the IG tails.
+        gamma = float(rng.gamma(shape=shape, scale=1.0))
+        if not np.isfinite(gamma) or gamma <= 0:
+            raise FloatingPointError("variance update Gamma draw must be finite and positive")
+        sig2[i] = rate / gamma
+        if not np.isfinite(sig2[i]) or sig2[i] <= 0:
+            raise FloatingPointError("residual variance draw must be finite and positive")
 
-    sigma_new = np.diag(sig2)
-    sigma_new = symmetrize(np.asarray(sigma_new, dtype=float))
-    return beta, sigma_new
+    return beta, np.diag(sig2)
 
 
 def _dl_sample_beta_svrw(
