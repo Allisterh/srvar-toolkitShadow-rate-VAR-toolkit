@@ -5,13 +5,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import time
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from scripts.qualify_samplers import chain_diagnostics, source_manifest
+from scripts.qualify_samplers import chain_diagnostics
+from scripts.study_evidence import archive_sources
+from srvar._prior_io import prior_to_json
 from srvar.api import fit, forecast
 from srvar.config import build_model, build_prior, load_config, load_dataset_from_csv
 from srvar.data.dataset import Dataset
@@ -23,8 +26,8 @@ from srvar.sv import VolatilitySpec
 def monitored_draws(result: FitResult) -> tuple[np.ndarray, list[str]]:
     """Monitor coefficients and covariance parameters, plus terminal SV states."""
     parts, labels = [], []
-    for name in ("beta_draws", "sigma_draws", "q_draws", "sigma_eta2_draws", "h_draws"):
-        value = getattr(result, name)
+    for name in ("beta_draws", "sigma_draws", "q_draws", "sigma_eta2_draws", "h_draws", "h0_draws"):
+        value = getattr(result, name, None)
         if value is None:
             continue
         if name == "h_draws":
@@ -76,13 +79,17 @@ def main() -> None:
         "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
         "training_values_sha256": hashlib.sha256(dataset.values.tobytes()).hexdigest(),
         "diagnostic_script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-        **source_manifest(),
+        "resolved_prior": json.loads(prior_to_json(prior)),
+        "initialisation": "common deterministic full-fit initial state; independent RNG streams",
+        **archive_sources(args.out, [Path(__file__)]),
     }
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     chains = []
     forecasts = []
     seeds = np.random.SeedSequence(args.seed).spawn(args.chains * 2)
+    elapsed_seconds = []
     for chain in range(args.chains):
+        start = time.perf_counter()
         result = fit(
             dataset,
             model,
@@ -90,6 +97,7 @@ def main() -> None:
             SamplerConfig(draws=args.warmup + args.draws, burn_in=args.warmup, thin=1),
             rng=np.random.default_rng(seeds[2 * chain]),
         )
+        elapsed_seconds.append(time.perf_counter() - start)
         values, labels = monitored_draws(result)
         chains.append(values)
         predictive = forecast(
@@ -116,6 +124,7 @@ def main() -> None:
             **diagnostic,
         }
     )
+    frame["ess_bulk_per_fit_second"] = frame.ess_bulk / sum(elapsed_seconds)
     frame["flag"] = (
         (frame.rhat > 1.01)
         | (frame.ess_bulk < 400)
@@ -130,6 +139,9 @@ def main() -> None:
         mean=np.stack(forecasts).mean(axis=1),
         sd=np.stack(forecasts).std(axis=1),
         variables=np.asarray(dataset.variables),
+    )
+    (args.out / "timing.json").write_text(
+        json.dumps({"fit_seconds_per_chain": elapsed_seconds}, indent=2) + "\n"
     )
     print(f"flagged_parameters={int(frame.flag.sum())}/{len(frame)}", flush=True)
 

@@ -8,6 +8,12 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 
+- Fixed-DGP empirical-Bayes DL coverage harness with failure-inclusive bounds,
+  per-dataset prior rates and diagnostics; this is not SBC.
+- An isolated RW-SV mixture-model posterior oracle with quadrature checks and
+  dispersed chains, plus a study-only interweaving prototype. Full-chain diagnostics now retain h0, resolved priors,
+  fitting time and exact source snapshots. These studies do not certify empirical use.
+
 - Constructor provenance on `PriorSpec` and complete resolved-prior metadata in
   fit artifacts, including explicit/default DL inputs and Minnesota precisions.
 - Standalone component calibration, revision-specific local benchmark and empirical

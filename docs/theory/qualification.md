@@ -60,3 +60,80 @@ For triangular RW SV, pass the generated `legacy_homoskedastic.yaml` configurati
 The diagnostic table covers coefficients, free covariance/factor entries, terminal SV states and volatility-innovation variances. It excludes structural covariance zeros and the fixed diagonal of Q. It does not cover every historical latent state. Monitored draws and forecast paths are retained in non-object NPZ files. R-hat above 1.01, bulk/tail ESS below 400 or undefined diagnostics trigger review flags. Those thresholds identify runs needing investigation; they are not posterior-correctness proofs.
 
 For method details see the [Stan SBC guide](https://mc-stan.org/docs/stan-users-guide/simulation-based-calibration.html) and [Vehtari et al. on rank-normalised diagnostics](https://arxiv.org/abs/1903.08008). The sampler targets and unresolved shrinkage contracts are described in {doc}`mcmc`.
+
+## Empirical-Bayes DL interval coverage
+
+The plug-in prior requires frequentist coverage checks that repeat scale estimation
+inside every simulated training window. This is a fixed-DGP study, not SBC:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python scripts/qualify_dl_empirical_bayes.py \
+  --out .planning/private/dl-eb-coverage \
+  --replications 30 --chains 4 --draws 1000 --warmup 500 --workers 4
+```
+
+The four declared scenarios vary sample size, stationary AR persistence, equation
+scale and activation of the variance floor. They use two independent AR(1) series,
+zero intercept and Gaussian innovations; they do not cover cross-equation dynamics,
+ELB, SV or non-zero prior means. Initial observations are drawn from the stationary
+distribution. Each dataset supplies one empirical-Bayes prior shared by its chains.
+
+`replications.jsonl` retains prior rates, floor activation, interval endpoints,
+coverage and parameter diagnostics. `dataset_counts.csv` records every attempted
+cell, including cells with no successful fits. `summary.csv` reports coverage
+conditional on numerical success, Wilson intervals and worst/best coverage bounds
+when failed datasets are included. Diagnostics never remove a dataset from the
+summary. Multiple chains improve posterior estimation; they do not increase the
+number of independent coverage replications. Full-fit starts remain common and
+deterministic, with independent random streams.
+
+## Isolated RW-SV investigation
+
+Check state-block mixing against a tractable posterior before attributing full-fit
+failures to a particular transition:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python scripts/diagnose_sv_state_block.py \
+  --out .planning/private/sv-state-oracle --draws 10000 --warmup 3000
+```
+
+This harness fixes two transformed observations, enumerates the 49 KSC mixture
+allocations, integrates initial/state values analytically and integrates innovation
+variance on a refined log grid. Four chains start at dispersed states and variances.
+The output retains chains, reference grid mass, refinement error, boundary mass,
+R-hat/ESS, ESS per second and mean errors in estimated MCSE units. It tests the
+KSC approximate-observation target; it does not establish approximation accuracy
+against the original Gaussian-innovation SV likelihood or diagnose all full-fit
+couplings. AR(1) state dynamics are outside this oracle.
+
+The empirical chain harness also archives the resolved prior and exact source,
+monitors initial volatility states and records fitting time. Choose canonical
+Minnesota explicitly for triangular models. Common full-fit initial states and
+finite retained draws remain limits, even if thresholds pass. Preserve earlier
+failed studies and use a fresh output directory for every run.
+
+## Experimental state interweaving
+
+`scripts/compare_sv_parameterisations.py` compares the centred RW state sweep with
+an experimental interweaving step on fixed synthetic mixture-model observations:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python scripts/compare_sv_parameterisations.py \
+  --out .planning/private/sv-interweaving --draws 10000 --warmup 3000
+```
+
+The extra step resamples mixture labels, sets $z=(h-h_0)/s$ with
+$s=\sqrt{\sigma_\eta^2}$, draws $h_0$ given $z,s$, and takes one symmetric
+Metropolis proposal for $\ell=\log s$. For an IG(a,b) innovation-variance prior,
+the transformed conditional includes $-2a\ell-b\exp(-2\ell)$ as well as the
+observation quadratic. The state transformation cancels the random-walk scale
+normalisation. The proposal standard deviation is fixed at 0.15; there is no
+output-dependent tuning.
+
+The two-observation case is compared with the enumerated posterior; a 200-state
+case compares mixing and posterior means under the same declared target. Both
+use $h_0\sim N(0,2)$ and innovation variance $IG(2,0.1)$, which differ from the
+library's default SV hyperparameters. Results therefore do not identify the
+cause of a particular empirical failure. This kernel exists only in the study
+script. It is not selected by `fit` and requires separate review before any
+production integration.

@@ -280,6 +280,8 @@ These fixes have targeted numerical checks. Human scientific review, full simula
 
 DL residual priors now require an explicit Python mode: `PriorSpec.from_dl(..., residual_prior="empirical_bayes", y=training_values, p=p)` uses `IG(2, sigma2_hat_i)`, while `residual_prior="explicit"` requires both `nu0` and diagonal `s0`. YAML defaults to empirical Bayes, estimated within each training window. Earlier default-configured DL runs used `IG(N + 2, 1)`; explicit overrides may have used other values. Triangular SV now accepts canonical Minnesota equation-specific precisions and rejects `minnesota_legacy`; custom shared Gaussian covariances remain supported. These changes alter the fitted models, so regenerate affected results in new output directories and obtain a separate scientific review. Component approval does not establish full-model convergence or empirical validity. See [MCMC semantics](docs/theory/mcmc.md) and the [configuration reference](docs/user-guide/configuration-reference.md).
 
+Dedicated [qualification tools](docs/theory/qualification.md) now measure fixed-DGP empirical-Bayes DL coverage and compare an isolated RW-SV state block with an enumerated mixture-model reference. Their outputs retain failures, diagnostic flags, prior parameters and exact source snapshots. Full-model calibration and substantive empirical claims require separate evidence.
+
 Reproducible component calibration, local benchmark comparisons and multi-chain diagnostic commands are documented in [Statistical qualification studies](docs/theory/qualification.md). These studies record source fingerprints and diagnostic failures; component checks do not certify every model family.
 
 ### Labeled outputs (`xarray` / ArviZ)
