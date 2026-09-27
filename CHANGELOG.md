@@ -8,6 +8,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 
+- Paired DL diagnostic study crossing empirical-Bayes/oracle residual-prior rates
+  with DL/fixed Gaussian coefficient priors. Retains all raw chains, failed arms,
+  paired MCSE and failure-inclusive coverage-difference bounds. Production
+  samplers and defaults are unchanged; this study does not certify calibration.
 - Fixed-DGP empirical-Bayes DL coverage harness with failure-inclusive bounds,
   per-dataset prior rates and diagnostics; this is not SBC.
 - An isolated RW-SV mixture-model posterior oracle with quadrature checks and

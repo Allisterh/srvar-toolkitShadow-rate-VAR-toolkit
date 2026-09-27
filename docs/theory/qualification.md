@@ -87,6 +87,53 @@ summary. Multiple chains improve posterior estimation; they do not increase the
 number of independent coverage replications. Full-fit starts remain common and
 deterministic, with independent random streams.
 
+## Paired residual-prior and shrinkage controls
+
+Compare specified procedure choices on the same datasets using a four-arm study:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m scripts.compare_dl_controls \
+  --out .planning/private/dl-paired-controls \
+  --cells short floor_stress --replications 30 \
+  --chains 4 --draws 1000 --warmup 500 --seed 20260928 --workers 4
+```
+
+The arms cross empirical-Bayes versus known-DGP residual-prior rates with the
+production DL hierarchy versus independent Gaussian N(0,1) coefficient priors.
+All use IG shape 2 and zero coefficient-prior means. The Gaussian control has
+custom provenance and uses the existing equation-wise precision route; it is
+not a Minnesota construction. Its fixed variances are in the supplied units,
+so the stress cell is not an equivalent rescaling of the ordinary prior.
+Oracle rates use information unavailable in empirical applications.
+
+Dataset seeds and chain seeds match the earlier DL coverage harness. Each arm
+receives the same data and starts new generators from those chain seeds; distinct
+RNG consumption can limit the benefit of shared seeds. Data SHA-256 values refer
+to C-order little-endian float64 observation bytes. Input data, truth, full priors
+and every retained coefficient/variance chain are saved, together with exact
+source snapshots. If an arm fails, its previously completed chains and exception
+are retained; draws inside the failing fit call are unavailable. Other arms
+continue. A run with failed arms exits non-zero after writing
+its summaries. Output directories must be new.
+
+`summary.csv` reports marginal coverage, Wilson intervals, bias, RMSE, widths and
+diagnostics. `arm_counts.csv` includes all-failed arms. `paired_summary.csv` reports
+oracle-minus-EB differences within each coefficient prior, Gaussian-minus-DL
+differences within each residual prior, and their interaction (the oracle effect
+under Gaussian minus the oracle effect under DL). Coverage, bias and width
+contrasts use complete dataset pairs with sample-based MCSE. Missing outcomes
+also receive worst/best coverage-difference bounds over all attempted datasets;
+these are missing-result bounds, not confidence intervals. Flagged chains remain
+in every summary.
+
+Thirty independent datasets give nominal marginal coverage MCSE about 0.055 at
+coverage 0.90. This supports investigation of large differences, not precise
+calibration certification. Repeated datasets are controlled comparisons, not
+independent replication of earlier coverage estimates. Differences concern these
+specified priors and DGPs; they neither prove the DL hierarchy's target nor
+identify a universal effect of shrinkage. Separate prior-floor estimation effects
+and changes of measurement units before changing production defaults.
+
 ## Isolated RW-SV investigation
 
 Check state-block mixing against a tractable posterior before attributing full-fit

@@ -288,6 +288,12 @@ DL residual priors now require an explicit Python mode: `PriorSpec.from_dl(..., 
 
 Dedicated [qualification tools](docs/theory/qualification.md) now measure fixed-DGP empirical-Bayes DL coverage and compare an isolated RW-SV state block with an enumerated mixture-model reference. Their outputs retain failures, diagnostic flags, prior parameters and exact source snapshots. Full-model calibration and substantive empirical claims require separate evidence.
 
+The paired DL control study crosses estimated versus known-DGP residual-prior
+rates with DL versus fixed Gaussian coefficient priors on identical datasets.
+It retains raw chains, per-arm failures and paired uncertainty estimates to
+investigate coverage failures without changing production samplers. See the
+[study controls and interpretation](docs/theory/qualification.md#paired-residual-prior-and-shrinkage-controls).
+
 Reproducible component calibration, local benchmark comparisons and multi-chain diagnostic commands are documented in [Statistical qualification studies](docs/theory/qualification.md). These studies record source fingerprints and diagnostic failures; component checks do not certify every model family.
 
 ### Labeled outputs (`xarray` / ArviZ)
