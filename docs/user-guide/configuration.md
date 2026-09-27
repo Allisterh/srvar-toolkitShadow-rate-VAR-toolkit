@@ -128,7 +128,7 @@ prior:
 
 Use DL when you want global–local shrinkage over individual VAR coefficients.
 
-- Use `PriorSpec.from_dl(k=..., n=..., residual_prior="empirical_bayes", y=training_values, p=..., include_intercept=...)`, or select `residual_prior="explicit"` with both `nu0` and diagonal `s0`.
+- Use `PriorSpec.from_dl(k=..., n=..., residual_prior="empirical_bayes", y=training_values, p=..., include_intercept=...)`, or select `residual_prior="explicit"` with both `nu0` and diagonal `s0`. Empirical-Bayes rates now use normalised AR regressions without an absolute floor. DL `min_sigma2` is removed; invalid auxiliary regressions raise an error. Use saved explicit rates to reproduce an earlier target.
 - YAML defaults to empirical Bayes within each training window. The implicit Python IG(N+2, 1) default has been removed; see the [configuration reference](configuration-reference.md) for migration.
 
 YAML example:

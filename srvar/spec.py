@@ -368,6 +368,45 @@ def _estimate_minnesota_sigma2(
     return sigma2
 
 
+def _estimate_dl_residual_rates(*, y: np.ndarray, p: int, include_intercept: bool) -> np.ndarray:
+    """Estimate proper IG rates with dimensionless identification/resolution checks."""
+    rates = np.empty(y.shape[1])
+    for i, series in enumerate(y.T):
+        context = (
+            f"DL empirical-Bayes equation {i}: "
+            "use an identified training window or residual_prior='explicit' with proper rates"
+        )
+        scale = float(np.max(np.abs(series)))
+        if scale == 0:
+            raise ValueError(f"zero series; {context}")
+        x, response = design_matrix(
+            (series / scale)[:, None], p, include_intercept=include_intercept
+        )
+        degrees = x.shape[0] - x.shape[1]
+        if degrees <= 0:
+            raise ValueError(f"non-positive residual degrees of freedom; {context}")
+        beta, _, rank, _ = np.linalg.lstsq(x, response, rcond=None)
+        if rank != x.shape[1]:
+            raise ValueError(f"rank-deficient auxiliary AR design; {context}")
+        residual_norm = float(np.linalg.norm(response - x @ beta))
+        tolerance = (
+            np.finfo(float).eps
+            * max(x.shape)
+            * (np.linalg.norm(response) + np.linalg.norm(x) * np.linalg.norm(beta))
+        )
+        if residual_norm <= tolerance:
+            raise ValueError(f"numerically zero auxiliary AR residuals; {context}")
+        # Restore units after taking the root, avoiding an intermediate scale**2 overflow.
+        with np.errstate(over="ignore", under="ignore", invalid="ignore"):
+            rate = np.square(scale * (residual_norm / np.sqrt(degrees)))
+        if not np.isfinite(rate) or rate <= 0:
+            raise ValueError(
+                f"residual rate is not representable as finite and positive; {context}"
+            )
+        rates[i] = rate
+    return rates
+
+
 def _build_minnesota_prior_mean(
     *,
     n: int,
@@ -994,7 +1033,6 @@ class PriorSpec:
         residual_prior: str | None = None,
         y: np.ndarray | None = None,
         p: int | None = None,
-        min_sigma2: float | None = None,
         include_intercept: bool = True,
         m0: np.ndarray | None = None,
         s0: np.ndarray | None = None,
@@ -1014,10 +1052,10 @@ class PriorSpec:
         y, p:
             Training observations (T, N) and lag order, required only in
             empirical-Bayes mode. K must equal N*p + include_intercept.
-        min_sigma2:
-            Positive finite residual-variance floor, default 1e-12 in
-            empirical-Bayes mode; forbidden in explicit mode. The estimator
-            divides residual sum of squares by max(T-p-p-include_intercept, 1).
+            Regressions are normalised per series before fitting, with positive
+            residual degrees of freedom T-p-(p+include_intercept) and full rank
+            required. Zero or numerically unresolved residuals are rejected;
+            no variance floor is applied. See Notes for the resolution rule.
         k, n:
             Coefficient and equation dimensions.
         include_intercept:
@@ -1032,6 +1070,13 @@ class PriorSpec:
 
         Notes
         -----
+        For each normalised regression, reject residual norm <=
+        eps*max(X.shape)*(norm(response) + norm(X, 'fro')*norm(beta)).
+        This numerical resolution check is dimensionless, not a statistical
+        test. Returned rates must be finite and positive in the original units.
+        The former min_sigma2 option has been removed from DL; supply resolved
+        rates in explicit mode to reproduce an earlier floored prior.
+
         The former implicit IG(N+2, 1) default has been removed. To reproduce
         those hyperparameters deliberately, select explicit mode with nu0=N+2
         and s0=I. SV residual variances follow their own state model; these IG
@@ -1063,16 +1108,11 @@ class PriorSpec:
                 raise ValueError("training y must be finite with shape (T, N) and T > p")
             if k != n * p + int(include_intercept):
                 raise ValueError("k must equal n*p + include_intercept")
-            floor = 1e-12 if min_sigma2 is None else float(min_sigma2)
-            if not np.isfinite(floor) or floor <= 0:
-                raise ValueError("min_sigma2 must be finite and positive")
-            sigma2 = _estimate_minnesota_sigma2(
-                y=ya, p=p, include_intercept=include_intercept, min_sigma2=floor
-            )
+            sigma2 = _estimate_dl_residual_rates(y=ya, p=p, include_intercept=include_intercept)
             s0a, nu0a = np.diag(sigma2), 2.0
         else:
-            if y is not None or p is not None or min_sigma2 is not None:
-                raise ValueError("explicit residual prior forbids y, p and min_sigma2")
+            if y is not None or p is not None:
+                raise ValueError("explicit residual prior forbids y and p")
             if s0 is None or nu0 is None:
                 raise ValueError("explicit residual prior requires both nu0 and s0")
             s0a, nu0a = np.asarray(s0, dtype=float), float(nu0)

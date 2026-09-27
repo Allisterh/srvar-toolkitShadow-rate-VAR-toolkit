@@ -94,7 +94,7 @@ def run_replication(job: dict) -> dict:
         rows=rows,
         rates=np.diag(prior.niw.s0).tolist(),
         shape=prior.niw.nu0,
-        floor_active=(np.diag(prior.niw.s0) == 1e-12).tolist(),
+        rate_policy="normalised_ar",
         seconds=time.perf_counter() - start,
     )
 

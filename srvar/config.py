@@ -618,7 +618,12 @@ def build_prior(cfg: dict[str, Any], *, dataset: Dataset, model: ModelSpec) -> P
         if not isinstance(hyp, dict):
             raise ConfigError("prior.dl must be a mapping")
 
-        allowed = {"abeta", "dl_scaler", "residual_prior", "nu0", "s0", "min_sigma2"}
+        if "min_sigma2" in hyp:
+            raise ConfigError(
+                "prior.dl.min_sigma2 was removed; use empirical_bayes without a floor "
+                "or explicit nu0,s0 to reproduce resolved rates"
+            )
+        allowed = {"abeta", "dl_scaler", "residual_prior", "nu0", "s0"}
         if set(hyp) - allowed:
             raise ConfigError("prior.dl contains unsupported keys")
         kwargs4: dict[str, Any] = dict(hyp)
@@ -627,8 +632,6 @@ def build_prior(cfg: dict[str, Any], *, dataset: Dataset, model: ModelSpec) -> P
             if "nu0" in hyp or "s0" in hyp:
                 raise ConfigError("empirical_bayes forbids prior.dl.nu0 and prior.dl.s0")
             kwargs4.update(y=dataset.values, p=model.p)
-        elif "min_sigma2" in hyp:
-            raise ConfigError("prior.dl.min_sigma2 requires empirical_bayes mode")
         try:
             return PriorSpec.from_dl(
                 k=k, n=dataset.N, include_intercept=model.include_intercept, **kwargs4

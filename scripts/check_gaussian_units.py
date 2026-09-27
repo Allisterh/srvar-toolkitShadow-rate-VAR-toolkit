@@ -61,7 +61,7 @@ def run_dataset(job: dict) -> list[dict]:
     out = Path(job["out"])
     streams = np.random.SeedSequence([job["seed"], 0, job["replicate"]]).spawn(job["chains"] + 1)
     y, truth = baseline.generate_data(0, np.random.default_rng(streams[0]))
-    base_prior = controls.make_prior(y, truth, "gaussian_unfloored")
+    base_prior = controls.make_prior(y, truth, "gaussian_policy")
     np.savez_compressed(out / f"data-{job['replicate']:04d}.npz", y=y, truth=truth)
     reference = None
     records = []
@@ -72,7 +72,7 @@ def run_dataset(job: dict) -> list[dict]:
             scales = np.asarray(units)
             prior = transform_prior(base_prior, scales)
             record["prior"] = json.loads(prior_to_json(prior))
-            raw_rates = controls.estimate_unfloored_rates(y * scales)
+            raw_rates = np.diag(controls.make_prior(y * scales, truth, "gaussian_policy").niw.s0)
             record["estimated_rates_back"] = (raw_rates / scales**2).tolist()
             record["floored_rates_back"] = (np.maximum(raw_rates, 1e-12) / scales**2).tolist()
             dataset = Dataset.from_arrays(values=y * scales, variables=["a", "b"])

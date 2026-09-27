@@ -274,7 +274,6 @@ prior:
     abeta: 0.5                     # optional
     dl_scaler: 0.1                 # optional
     residual_prior: empirical_bayes # default; uses this fit's training window
-    min_sigma2: 1.0e-12            # optional positive residual-variance floor
 ```
 
 For homoskedastic DL, empirical-Bayes mode uses $IG(2,\widehat{\sigma}_i^2)$ from univariate AR(p) residuals within each training window. The model supplies p and the intercept setting. No explicit shape/rate overrides are allowed in this mode. Unknown DL keys are rejected.
@@ -290,7 +289,7 @@ prior:
     s0: [[2.0, 0.0], [0.0, 8.0]]
 ```
 
-Explicit mode requires both parameters and rejects `min_sigma2`. The Python API requires a mode: use `residual_prior="empirical_bayes", y=training_values, p=p`, or `residual_prior="explicit", nu0=..., s0=...`. It no longer silently supplies $IG(N+2,1)$. To reproduce that old default deliberately, pass `nu0=N+2, s0=np.eye(N)` in explicit mode. Regenerate affected outputs in new directories. SV uses its own volatility state prior; these IG parameters describe homoskedastic residual variances. See {doc}`../theory/mcmc` for qualification limits.
+Explicit mode requires both parameters. DL no longer accepts `min_sigma2` in either mode. Empirical-Bayes rates use normalised auxiliary AR regressions without an absolute floor; they require positive residual degrees of freedom, a full-rank design and residuals above numerical resolution. Invalid or nonrepresentable rates raise an error rather than substituting a floor. Use a longer identified training window or supply an explicitly justified proper prior. This change does not alter Minnesota's separate `min_sigma2` option. The Python API requires a mode: use `residual_prior="empirical_bayes", y=training_values, p=p`, or `residual_prior="explicit", nu0=..., s0=...`. It no longer silently supplies $IG(N+2,1)$. To reproduce that old default deliberately, pass `nu0=N+2, s0=np.eye(N)` in explicit mode. Regenerate affected outputs in new directories. SV uses its own volatility state prior; these IG parameters describe homoskedastic residual variances. See {doc}`../theory/mcmc` for qualification limits.
 
 ## `sampler`
 

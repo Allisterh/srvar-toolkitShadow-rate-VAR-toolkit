@@ -27,6 +27,7 @@ from srvar.spec import (
 )
 
 ARMS = ("dl_eb", "dl_oracle", "gaussian_eb", "gaussian_oracle")
+POLICY_ARMS = ("dl_policy", "gaussian_policy")
 UNFLOORED_ARMS = ("dl_unfloored", "gaussian_unfloored")
 LABELS = ("beta00", "beta10", "beta20", "beta01", "beta11", "beta21", "variance0", "variance1")
 CONTRASTS = {
@@ -58,12 +59,16 @@ def estimate_unfloored_rates(y: np.ndarray) -> np.ndarray:
 
 def make_prior(y: np.ndarray, truth: np.ndarray, arm: str) -> PriorSpec:
     """Change only the declared prior factors; the Gaussian comparator is N(0,I)."""
-    if arm not in ARMS + UNFLOORED_ARMS:
+    if arm not in ARMS + UNFLOORED_ARMS + POLICY_ARMS:
         raise ValueError(f"unknown study arm: {arm}")
-    if arm.endswith("_eb"):
+    if arm.endswith("_policy"):
         prior = PriorSpec.from_dl(k=3, n=2, residual_prior="empirical_bayes", y=y, p=1)
     else:
-        rates = estimate_unfloored_rates(y) if arm.endswith("_unfloored") else truth[-2:]
+        if arm.endswith("_eb"):
+            # Preserve the historical floored study target independently of current defaults.
+            rates = _estimate_minnesota_sigma2(y=y, p=1, include_intercept=True, min_sigma2=1e-12)
+        else:
+            rates = estimate_unfloored_rates(y) if arm.endswith("_unfloored") else truth[-2:]
         if not np.isfinite(rates).all() or np.any(rates <= 0):
             raise ValueError(
                 "unfloored/oracle IG rates must be finite and positive; no replacement is applied"
@@ -125,6 +130,8 @@ def run_dataset(job: dict) -> list[dict]:
     dataset = Dataset.from_arrays(values=y, variables=["a", "b"])
     records = []
     arms = ARMS + UNFLOORED_ARMS if job.get("include_unfloored", False) else ARMS
+    if job.get("policy_only", False):
+        arms = POLICY_ARMS
     for arm in arms:
         started = time.perf_counter()
         record = dict(cell=cell, replicate=job["replicate"], arm=arm, data_sha256=data_hash)
@@ -280,7 +287,14 @@ def main() -> None:
         action="store_true",
         help="add estimated rates without a floor as two extra arms",
     )
+    parser.add_argument(
+        "--policy-only",
+        action="store_true",
+        help="fit only the current DL residual-rate policy arms",
+    )
     args = parser.parse_args()
+    if args.policy_only and args.include_unfloored:
+        parser.error("--policy-only and --include-unfloored are mutually exclusive")
     if (
         args.replications < 2
         or args.chains < 2
@@ -296,7 +310,11 @@ def main() -> None:
     controls = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
     arms = ARMS + UNFLOORED_ARMS if args.include_unfloored else ARMS
     contrasts = CONTRASTS | UNFLOORED_CONTRASTS if args.include_unfloored else CONTRASTS
+    if args.policy_only:
+        arms = POLICY_ARMS
+        contrasts = {"gaussian_minus_dl_policy": {"gaussian_policy": 1, "dl_policy": -1}}
     manifest = dict(
+        rate_policy="normalised_ar" if args.policy_only else "historical_absolute_floor_controls",
         controls=controls,
         arms=arms,
         contrasts=contrasts,

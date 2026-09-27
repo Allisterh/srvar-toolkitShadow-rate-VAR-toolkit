@@ -6,6 +6,18 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Changed
+
+- DL empirical-Bayes residual rates now use normalised AR regressions without an
+  absolute floor. Require positive residual degrees of freedom, a full-rank
+  design and numerically resolved residuals; reject nonrepresentable rates.
+  Remove DL `min_sigma2` from Python and YAML. Reproduce old priors with saved
+  explicit rates, and regenerate affected results under a separate review.
+  Minnesota priors, explicit rates and sampler conditionals are unchanged.
+- Qualification tools preserve historical floored controls explicitly and add
+  current-policy arms. Coverage records now identify `rate_policy` instead of
+  the obsolete `floor_active` field; archived records remain unchanged.
+
 ### Added
 
 - Optional unfloored estimated-rate arms in the paired prior study, with explicit

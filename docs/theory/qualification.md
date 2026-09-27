@@ -73,13 +73,13 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python scripts/qualify_dl_empirical_bay
 ```
 
 The four declared scenarios vary sample size, stationary AR persistence, equation
-scale and activation of the variance floor. They use two independent AR(1) series,
+scale, including a tiny-scale cell that activated the historical variance floor. They use two independent AR(1) series,
 zero intercept and Gaussian innovations; they do not cover cross-equation dynamics,
 ELB, SV or non-zero prior means. Initial observations are drawn from the stationary
 distribution. Each dataset supplies one empirical-Bayes prior shared by its chains.
 
-`replications.jsonl` retains prior rates, floor activation, interval endpoints,
-coverage and parameter diagnostics. `dataset_counts.csv` records every attempted
+`replications.jsonl` retains prior rates and interval endpoints,
+coverage, rate-policy identity and parameter diagnostics. `dataset_counts.csv` records every attempted
 cell, including cells with no successful fits. `summary.csv` reports coverage
 conditional on numerical success, Wilson intervals and worst/best coverage bounds
 when failed datasets are included. Diagnostics never remove a dataset from the
@@ -98,9 +98,9 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m scripts.compare_dl_controls \
   --chains 4 --draws 1000 --warmup 500 --seed 20260928 --workers 4
 ```
 
-The arms cross empirical-Bayes versus known-DGP residual-prior rates with the
+The historical arms cross floored empirical-Bayes versus known-DGP residual-prior rates with the
 production DL hierarchy versus independent Gaussian N(0,1) coefficient priors.
-All use IG shape 2 and zero coefficient-prior means. The Gaussian control has
+All use IG shape 2 and zero coefficient-prior means. The historical estimated-rate arms explicitly retain the old 1e-12 floor, independently of the current DL constructor. The Gaussian control has
 custom provenance and uses the existing equation-wise precision route; it is
 not a Minnesota construction. Its fixed variances are in the supplied units,
 so the stress cell is not an equivalent rescaling of the ordinary prior.
@@ -134,6 +134,28 @@ specified priors and DGPs; they neither prove the DL hierarchy's target nor
 identify a universal effect of shrinkage. Separate prior-floor estimation effects
 and changes of measurement units before changing production defaults.
 
+### Qualify the current DL rate policy
+
+Use `--policy-only` instead of `--include-unfloored` to fit the current constructor
+rates under DL and fixed Gaussian coefficients. The `dl_policy` and
+`gaussian_policy` arms use the same normalised AR rate estimator and IG shape 2;
+their paired contrast compares coefficient-prior choices. For example:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m scripts.compare_dl_controls \
+  --out .planning/private/dl-rate-policy --policy-only \
+  --cells short floor_stress --replications 30 --chains 4 \
+  --draws 1000 --warmup 500 --seed 20260928 --workers 4
+```
+
+Rates have no absolute floor. The constructor rejects deficient designs,
+non-positive residual degrees of freedom, unresolved residuals and rates that
+cannot be represented as finite and positive. See {doc}`mcmc` for the exact rule.
+The harness retains failed arms and excludes no draws based on diagnostics.
+Compare with archived controls by dataset identity and resolved rate, not merely
+by a prior-mode label. Rate and covariance transformations do not qualify the
+full DL hyperparameter hierarchy.
+
 ### Separate estimation from the residual-prior floor
 
 Add `--include-unfloored` to the paired command to fit six arms. The extra DL
@@ -165,15 +187,15 @@ IG rate by $s_j^2$ while preserving shape. This also transforms the production
 initial residual variances. The shared `v0` container is inert on this path;
 the actual transformed coefficient covariances use equation-wise precisions.
 
-The base prior uses independent N(0,1) coefficients and unfloored training-window
-rates at IG shape 2. Base units are compared with common factors 1e-7 and 1e7
+The base prior uses independent N(0,1) coefficients and current DL training-window
+rates at IG shape 2. Re-estimated unit checks also use the current DL rate policy. Base units are compared with common factors 1e-7 and 1e7
 and mixed factors (1e-7,1e7). With the same per-chain seeds, every retained draw
 is converted back to base units. The declared tolerance is 1e-8 for
 `max(abs(back-base)/max(1,abs(base)))`, separately for each parameter. Arrays,
 priors, diagnostics, errors and unsuccessful fits are retained. A mismatch or
 exception makes the command exit non-zero after writing evidence.
 
-Raw and floored AR rate estimates are also recomputed from the scaled data and
+Current AR rates and a historical absolute-floor control are recomputed from the scaled data and
 converted back, exposing the absolute floor's unit dependence separately from
 posterior sampling. Passing this finite grid checks numerical equivariance for
 the specified Gaussian target; it does not establish coverage or a transformation

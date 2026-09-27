@@ -43,11 +43,9 @@ def test_dl_empirical_bayes_matches_ar_reference_and_rescales(intercept):
     np.testing.assert_allclose(np.diag(scaled.niw.s0), np.diag(prior.niw.s0) * [4, 9, 16])
 
 
-def test_dl_short_window_and_active_floor():
-    prior = PriorSpec.from_dl(
-        k=3, n=1, p=2, y=np.zeros((3, 1)), residual_prior="empirical_bayes", min_sigma2=0.05
-    )
-    np.testing.assert_array_equal(prior.niw.s0, [[0.05]])
+def test_dl_short_window_rejected():
+    with pytest.raises(ValueError):
+        PriorSpec.from_dl(k=3, n=1, p=2, y=np.zeros((3, 1)), residual_prior="empirical_bayes")
 
 
 @pytest.mark.parametrize(
@@ -63,8 +61,6 @@ def test_dl_short_window_and_active_floor():
         {"residual_prior": "explicit", "nu0": 2, "s0": np.diag([1, -1])},
         {"residual_prior": "explicit", "nu0": 2, "s0": np.eye(2), "p": 1},
         {"residual_prior": "empirical_bayes", "p": 1, "y": np.ones((5, 2)), "nu0": 2},
-        {"residual_prior": "empirical_bayes", "p": 1, "y": np.ones((5, 2)), "min_sigma2": 0},
-        {"residual_prior": "empirical_bayes", "p": 1, "y": np.ones((5, 2)), "min_sigma2": np.inf},
         {"residual_prior": "empirical_bayes", "p": 1, "y": np.ones((1, 2))},
         {"residual_prior": "empirical_bayes", "p": 1, "y": np.full((5, 2), np.nan)},
         {"residual_prior": "empirical_bayes", "p": 2, "y": np.ones((5, 2))},
@@ -241,13 +237,13 @@ def test_dl_backtest_estimates_once_per_training_window_without_future_data(monk
     y = np.random.default_rng(199).normal(size=(20, 2))
     dates = pd.date_range("2000", periods=20, freq="MS")
     seen = []
-    original = spec_module._estimate_minnesota_sigma2
+    original = spec_module._estimate_dl_residual_rates
 
     def capture(**kwargs):
         seen.append(kwargs["y"].copy())
         return original(**kwargs)
 
-    monkeypatch.setattr(spec_module, "_estimate_minnesota_sigma2", capture)
+    monkeypatch.setattr(spec_module, "_estimate_dl_residual_rates", capture)
     cfg = {
         "data": {
             "csv_path": str(tmp_path / "data.csv"),

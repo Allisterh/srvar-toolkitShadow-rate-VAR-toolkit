@@ -136,7 +136,7 @@ def test_dl_study_reproduces_prior_and_intervals():
     first = dl_study.run_replication(job)
     second = dl_study.run_replication(job)
     assert first["rates"] == second["rates"]
-    assert first["floor_active"] == second["floor_active"]
+    assert first["rate_policy"] == second["rate_policy"] == "normalised_ar"
     assert len(first["rows"]) == 8
     for a, b in zip(first["rows"], second["rows"], strict=True):
         assert a["parameter"] == b["parameter"]
