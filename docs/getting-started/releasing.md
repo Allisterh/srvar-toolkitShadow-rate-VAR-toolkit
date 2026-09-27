@@ -79,6 +79,8 @@ distribution.
 
 If a tagged workflow cannot publish because its publishing tool is obsolete,
 review and merge the tooling repair on main. Keep the package tag immutable.
+If the pypi environment permits only tag deployments, obtain explicit maintainer
+approval to allow main as well; retain its required reviewers and tag rules.
 Dispatch the repaired workflow from main with both the package tag and its exact
 approved 40-character commit SHA:
 
