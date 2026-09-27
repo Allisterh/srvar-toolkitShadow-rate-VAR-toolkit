@@ -8,6 +8,7 @@ from .bvar import sample_posterior_niw
 from .data.dataset import Dataset
 from .elb import apply_elb_floor
 from .forecast_state import _terminal_lags
+from .inference_checks import validate_fit_for_inference
 from .linalg import solve_psd
 from .results import FitResult, ForecastResult
 from .var import is_stationary
@@ -257,6 +258,7 @@ def conditional_forecast(
     - Non-empty constraints with non-Gaussian shocks raise ``ValueError``. Empty
       constraints delegate to ordinary forecasting for homoskedastic models.
     """
+    validate_fit_for_inference(fit)
     if rng is None:
         rng = np.random.default_rng()
 

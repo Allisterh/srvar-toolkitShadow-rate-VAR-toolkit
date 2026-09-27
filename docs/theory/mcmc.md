@@ -98,7 +98,7 @@ If any of the last `p` observations are censored, prediction selects `latent_dra
 
 ### Verification boundary
 
-Regression tests check selected Gaussian conditionals, an integrated inverse-gamma posterior reference, volatility timing and posterior-state pairing. They do not establish convergence, full simulation-based calibration or empirical replication. Human scientific review is required before substantive use of changed samplers. Bayesian LASSO covariance/dimension coherence and shrinkage updates with non-zero prior means remain separate methodological review items.
+Regression tests check selected Gaussian conditionals, an integrated inverse-gamma posterior reference, volatility timing and posterior-state pairing. They do not establish convergence, full simulation-based calibration or empirical replication. Human scientific review is required before substantive use of changed samplers. Bayesian LASSO inference and non-zero-mean SSVS/DL are disabled pending methodological repair. DL/SSVS require retained draws and have no analytic NIW posterior fallback. ELB historical decomposition is also disabled until latent histories are paired.
 
 - Use `burn_in` and `thin` to control storage and reduce autocorrelation in retained draws.
 - For long runs, profile your model and consider multiple shorter chains rather than a single very long chain.

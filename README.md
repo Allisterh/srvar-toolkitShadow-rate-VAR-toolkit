@@ -62,6 +62,18 @@ The toolkit is designed for researchers and practitioners who need transparent, 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+### 0.4.0 alpha candidate boundaries
+
+Bayesian LASSO inference, non-zero-mean SSVS/DL and ELB historical decomposition
+raise explicit errors. Shrinkage inference requires retained parameter states;
+DL/SSVS results have no analytic NIW posterior fallback. Prior constructors and
+raw artefact inspection remain available for provenance.
+
+Full DL hierarchy calibration and stochastic-volatility convergence remain
+experimental. Component tests and passing CI do not establish empirical validity.
+The latest DL rate-policy decision remains pending; this candidate is not a
+publication or scientific approval. See [release scope](docs/user-guide/limitations.md).
+
 ### Built With
 
 [![Python][python-badge]][python-url]
@@ -280,8 +292,7 @@ These fixes have targeted numerical checks. Human scientific review, full simula
 
 Homoskedastic DL and canonical Minnesota now draw residual variances without
 clipping them to `[1e-12, 1e12]`. Invalid conditional parameters or non-finite,
-non-positive numerical draws fail explicitly. The empirical-Bayes prior-rate
-floor and DL shrinkage safeguards remain unchanged; posterior clipping removal
+non-positive numerical draws fail explicitly. DL shrinkage safeguards remain unchanged; posterior clipping removal
 does not establish interval calibration of the full procedure.
 
 DL empirical-Bayes residual rates use normalised AR regressions without an absolute
@@ -643,7 +654,7 @@ If you use **srvar-toolkit** in your research, please cite both the software and
   title        = {srvar-toolkit: Shadow-Rate VAR Toolkit for Python},
   year         = {2026},
   url          = {https://github.com/shawcharles/srvar-toolkit},
-  version      = {0.3.1}
+  version      = {0.4.0}
 }
 ```
 

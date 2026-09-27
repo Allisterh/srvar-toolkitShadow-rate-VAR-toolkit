@@ -122,16 +122,8 @@ prior:
     fix_intercept: true
 ```
 
-Bayesian LASSO:
-
-```yaml
-prior:
-  family: "blasso"
-  blasso:
-    mode: "global"
-    tau_init: 10000
-    lambda_init: 2.0
-```
+Bayesian LASSO inference is disabled pending a conditional-distribution repair.
+Use a supported prior; constructing a LASSO prior for provenance does not enable fitting.
 
 Dirichlet–Laplace:
 
@@ -233,7 +225,7 @@ hd = historical_decomposition_cholesky(
 
 Notes:
 - The decomposition is computed for dates `t=p..T-1` (the first `p` observations are lag initial conditions).
-- For ELB models, this defaults to using the latent dataset (`fit_res.latent_dataset`) unless `use_latent=False`.
+- ELB models are rejected until historical decomposition pairs latent histories with parameter draws.
 - This conditions the decomposition on the final latent history; it does not integrate over posterior uncertainty in that history.
 
 ## 11) Conditional / scenario forecasting (hard constraints)

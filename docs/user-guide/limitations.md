@@ -2,6 +2,21 @@
 
 This project targets transparency and reproducibility and is currently in an **alpha** stage.
 
+## Enforced inference boundaries
+
+Bayesian LASSO fitting and inference on its archived fits raise errors because
+its scale conditional needs repair. SSVS/DL require zero coefficient-prior means
+and retained posterior draws. Their `FitResult.posterior` is always `None`;
+forecasting and analysis cannot substitute a conditional NIW block. Conjugate
+NIW analytic inference remains available. Raw artefact inspection and prior
+construction do not imply that inference with those objects is supported.
+
+ELB Cholesky historical decomposition raises an error until latent histories are
+paired with parameter draws. Neither `use_latent=True` nor `False` bypasses it.
+Full DL hierarchy and SV fits remain experimental: diagnostics and component
+checks do not establish calibration or empirical validity. The latest rate-policy
+scientific decision remains pending for this 0.4.0 alpha candidate.
+
 ## Modeling limitations
 
 - **Stochastic volatility coverage is still evolving**: diagonal SV, triangular SV with a fixed factor and generally time-varying correlations, and factor SV are supported. Factor SV is currently limited to `prior.family: "niw"` with RW dynamics; ELB, steady-state, and robust shocks are supported.
@@ -12,10 +27,10 @@ This project targets transparency and reproducibility and is currently in an **a
 
 ## Statistical limitations / caveats
 
-- **MCMC diagnostics are your responsibility**: the toolkit returns draws, but does not currently ship full diagnostic tooling (R-hat, ESS, trace diagnostics). You should validate convergence and mixing.
+- **MCMC diagnostics are your responsibility**: the toolkit returns draws and includes qualification scripts for R-hat and ESS. Diagnose each intended fit; passing thresholds does not prove the target is correct.
 - **Sensitivity to prior settings**: results can change meaningfully with Minnesota hyperparameters, SSVS spike/slab variances, and SV priors.
-- **Scientific review remains necessary**: the corrected sampler conditionals have analytical regression checks, but full simulation-based calibration and empirical replication remain outstanding. Bayesian LASSO covariance/dimension coherence and shrinkage updates with non-zero prior means require separate review; see {doc}`../theory/mcmc`.
-- **ELB histories must remain paired**: censored terminal lags require retained latent histories aligned with parameter draws. Forecasts cannot substitute the last Gibbs history. Cholesky historical decomposition remains conditional on the final latent history and does not integrate over latent-history uncertainty.
+- **Scientific review remains necessary**: the corrected sampler conditionals have analytical regression checks, but full simulation-based calibration and empirical replication remain outstanding. Bayesian LASSO and non-zero-mean shrinkage are disabled pending repair; see {doc}`../theory/mcmc`.
+- **ELB histories must remain paired**: censored terminal lags require retained latent histories aligned with parameter draws. Forecasts cannot substitute the last Gibbs history. ELB Cholesky historical decomposition is disabled because it does not yet integrate paired latent-history uncertainty.
 
 ## Performance considerations
 

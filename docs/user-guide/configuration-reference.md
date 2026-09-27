@@ -250,6 +250,10 @@ prior:
 
 ### Bayesian LASSO (BLASSO)
 
+This schema remains readable for historical provenance, but fitting and inference
+are disabled pending repair of the scale conditional. Use a supported prior for
+new fits. SSVS/DL likewise reject non-zero coefficient-prior means.
+
 ```yaml
 prior:
   family: "blasso"

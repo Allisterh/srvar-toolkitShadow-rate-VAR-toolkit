@@ -3,6 +3,15 @@
 Releases are built from a version tag and published only through GitHub Actions trusted publishing.
 Tag pushes build and retain distributions; they cannot publish a package to PyPI.
 
+## Current candidate
+
+Version 0.4.0 is an alpha candidate with explicitly authorised pre-1.0 breaking
+changes. It has not been published. The latest DL rate-policy scientific decision
+remains pending; release checks and package builds cannot supply that decision.
+Keep the PR in draft until its numerical/public-contract reviews and final-head
+CI checks pass. Enforced and experimental boundaries are listed in
+{doc}`../user-guide/limitations`.
+
 ## First-time administrator setup
 
 This repository cannot configure PyPI or GitHub protection by itself. Before the first release, a

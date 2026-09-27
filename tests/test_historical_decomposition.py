@@ -111,7 +111,7 @@ def test_historical_decomposition_cholesky_supports_diagonal_sv() -> None:
     assert np.allclose(hd.shock_draws[0, :, 0], eps[1:])
 
 
-def test_historical_decomposition_defaults_to_latent_for_elb() -> None:
+def test_historical_decomposition_rejects_elb() -> None:
     ds = Dataset.from_arrays(values=np.zeros((3, 1)), variables=["y"])
     beta = np.array([[0.0], [0.5]], dtype=float)
     sigma = np.array([[1.0]], dtype=float)
@@ -122,7 +122,7 @@ def test_historical_decomposition_defaults_to_latent_for_elb() -> None:
         sigma_draws=sigma[None, :, :],
     )
 
-    with pytest.raises(ValueError, match="fit\\.latent_dataset"):
+    with pytest.raises(ValueError, match="ELB historical decomposition is disabled"):
         _ = historical_decomposition_cholesky(fit, draws=1, rng=np.random.default_rng(0))
 
 

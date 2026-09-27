@@ -6,86 +6,60 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
-### Changed
+## [0.4.0] - 2026-09-27
 
-- DL empirical-Bayes residual rates now use normalised AR regressions without an
-  absolute floor. Require positive residual degrees of freedom, a full-rank
-  design and numerically resolved residuals; reject nonrepresentable rates.
-  Remove DL `min_sigma2` from Python and YAML. Reproduce old priors with saved
-  explicit rates, and regenerate affected results under a separate review.
-  Minnesota priors, explicit rates and sampler conditionals are unchanged.
-- Qualification tools preserve historical floored controls explicitly and add
-  current-policy arms. Coverage records now identify `rate_policy` instead of
-  the obsolete `floor_active` field; archived records remain unchanged.
+Prepared alpha candidate; publication and the latest DL rate-policy scientific
+decision remain pending. The maintainer explicitly approved a pre-1.0 minor
+version for these breaking changes; this does not assert stable model calibration.
 
-### Added
+### Breaking changes
 
-- Optional unfloored estimated-rate arms in the paired prior study, with explicit
-  failure records for invalid rates. Add a Gaussian unit-transformation study
-  with matched priors, initial variances, raw chains and numerical error checks.
-  Production priors and safeguards are unchanged.
-- Paired DL diagnostic study crossing empirical-Bayes/oracle residual-prior rates
-  with DL/fixed Gaussian coefficient priors. Retains all raw chains, failed arms,
-  paired MCSE and failure-inclusive coverage-difference bounds. Production
-  samplers and defaults are unchanged; this study does not certify calibration.
-- Fixed-DGP empirical-Bayes DL coverage harness with failure-inclusive bounds,
-  per-dataset prior rates and diagnostics; this is not SBC.
-- An isolated RW-SV mixture-model posterior oracle with quadrature checks and
-  dispersed chains, plus a study-only interweaving prototype. Full-chain diagnostics now retain h0, resolved priors,
-  fitting time and exact source snapshots. These studies do not certify empirical use.
-
-- Constructor provenance on `PriorSpec` and complete resolved-prior metadata in
-  fit artifacts, including explicit/default DL inputs and Minnesota precisions.
-- Standalone component calibration, revision-specific local benchmark and empirical
-  multi-chain diagnostic scripts, with source manifests and retained failure evidence.
+- Bayesian LASSO inference is disabled pending repair of its scale conditional.
+  SSVS/DL reject non-zero prior means. Choose a supported prior and refit.
+- SSVS/DL require retained parameter draws and expose `posterior=None`.
+  Forecasts and structural analysis reject missing shrinkage states instead of
+  substituting an analytic NIW posterior. Use `burn_in < draws` and refit.
+- ELB Cholesky historical decomposition is disabled until posterior latent
+  histories are paired. `use_latent=False` does not bypass this restriction.
+- DL Python construction requires a residual-prior mode. Empirical Bayes uses
+  training-window IG(2, AR residual variance), with normalised regressions and
+  no absolute floor. Invalid or numerically unresolved regressions fail.
+  DL `min_sigma2` is removed; use explicit saved shape/rates to reproduce old
+  targets. YAML defaults to empirical Bayes. Minnesota floors are unchanged.
+- Canonical Minnesota supplies equation-specific triangular SV precisions;
+  legacy Minnesota is rejected on that path. Custom shared Gaussian priors
+  remain supported. Factor/tempered restrictions are retained.
+- Fit writers emit schema version 2 with the complete resolved prior.
+  `load_run_dir` restores that prior and rejects old runs without it;
+  `load_fit_npz` remains available for supported raw archive inspection.
+- Numerical outputs and seeded sequences change. Refit affected models and
+  regenerate forecasts and comparisons in new directories. Censored terminal
+  ELB lags require retained latent histories paired with parameter draws.
 
 ### Fixed
 
-- Remove post-draw residual-variance clipping in homoskedastic DL and canonical
-  Minnesota updates. Sample the IG conditional as rate divided by a unit Gamma
-  draw, and fail explicitly on invalid parameters or unrepresentable draws.
-  Return the diagonal covariance without an overflow-prone symmetric average.
-  Prior floors and shrinkage safeguards remain unchanged. Refit affected models
-  in fresh directories; boundary results and seeded rounding can change.
-- Retain residual variance state between coefficient updates in homoskedastic DL and
-  canonical Minnesota samplers, including ELB and steady-state paths.
-- Include every coupled likelihood term in triangular SV coefficient Gibbs updates.
-- Advance volatility states before each forecast observation, including the first horizon.
-- Pair ELB terminal histories with retained parameter draws, including after stationarity
-  filtering, and preserve observed/latent draw pairing when pooling forecasts.
-- Reject constrained Student-t and outlier-mixture scenarios instead of using Gaussian shocks.
-- Centre scalar Newey-West inputs and normalise all lagged products by the retained sample size.
-- Restrict the ArviZ extra to `>=0.17,<1` for the supported `InferenceData` interface.
-- Correct triangular SV descriptions: a fixed triangular factor generally permits changing
-  correlations.
+- Retain variance state between homoskedastic coefficient updates; remove
+  clipping of inverse-gamma residual draws and reject invalid numerical draws.
+- Include coupled likelihood terms in triangular SV coefficient Gibbs updates.
+- Advance volatility before each forecast observation and preserve paired
+  terminal ELB histories through stationarity filtering and ensemble pooling.
+- Reject constrained robust-shock scenarios that would substitute Gaussian shocks.
+- Centre scalar Newey-West inputs and normalise lagged products consistently.
+- Bound the ArviZ extra to the supported InferenceData interface.
 
-### Changed
+### Added
 
-- DL Python construction requires `residual_prior="empirical_bayes"` with training
-  data and lag order, or `"explicit"` with both IG shape and diagonal rates.
-  YAML defaults to training-window IG(2, AR residual variance). Earlier
-  default-configured DL runs used IG(N+2, 1); deliberately reproduce those values
-  through explicit mode or regenerate under the new prior in fresh directories.
-- Canonical Minnesota now supplies equation-specific coefficient precisions for
-  triangular RW/AR(1) SV, including ELB. Legacy Minnesota is rejected on this path.
-  Shared custom Gaussian priors remain supported; factor-SV and tempered-prior
-  boundaries are retained. Changed prior targets require separate scientific review.
+- Reproducible component, coverage, prior-control, unit-transformation and SV
+  diagnostic studies with raw evidence and exact source snapshots. Coverage
+  records identify the rate policy; archived studies retain their original targets.
+- CI coverage for xarray, ArviZ and Numba and tests at the exact release tag.
 
-- Fit artifact writers now emit version 2; forecasts remain version 1.
-  `load_run_dir` restores the saved prior instead of re-estimating it from config.
-  Older files without a saved prior remain readable through `load_fit_npz`, but
-  full run reconstruction now rejects them. Regenerate with a verified prior to
-  migrate. This persistence change does not alter sampler transitions or defaults.
-- Document the dimension-dependent DL residual-variance default and the missing
-  dependent-variable scaling of legacy Minnesota coefficient covariances in triangular
-  SV. Prior repairs remain separate from the approved component transitions; this
-  documentation change leaves all numerical source and qualification harnesses unchanged.
-- CI exercises xarray, ArviZ and Numba; release builds require tests at the exact selected tag.
-- Numerical results and seeded random-number sequences change. Refit affected models and
-  regenerate forecasts and comparisons. Censored terminal ELB lags now require aligned
-  `latent_draws`; refit if these were not retained. Public result schemas are unchanged.
-- Added analytical regression checks and documented sampler semantics. These checks do not
-  replace human scientific review, convergence assessment, full calibration or replication.
+### Scientific scope
+
+Full DL hierarchy calibration, triangular-SV convergence and empirical or
+replication claims remain unqualified. Structural identification and other
+model-specific assumptions require their own review. Earlier component approval
+does not approve later prior changes. See the documented release boundaries.
 
 ## [0.3.1] - 2026-07-18
 

@@ -6,6 +6,7 @@ from .bvar import sample_posterior_niw, simulate_var_forecast
 from .data.dataset import Dataset
 from .elb import apply_elb_floor
 from .forecast_state import _terminal_lags
+from .inference_checks import validate_fit_for_inference, validate_prior_for_inference
 from .results import FitResult, ForecastResult
 from .samplers import _fit_elb_gibbs, _fit_fsv, _fit_no_elb, _fit_svcov, _fit_svrw
 from .spec import ModelSpec, PriorSpec, SamplerConfig
@@ -26,9 +27,10 @@ def fit(
     Supported configurations
     ------------------------
     - Conjugate BVAR with Normal-Inverse-Wishart prior (``prior.family='niw'``)
-    - Spike-and-slab variable selection (``prior.family='ssvs'``)
+    - Zero-mean spike-and-slab variable selection (``prior.family='ssvs'``)
+    - Zero-mean Dirichlet-Laplace shrinkage (``prior.family='dl'``; experimental)
     - Effective lower bound (ELB) data-augmentation Gibbs sampler (``model.elb.enabled``)
-    - Stochastic volatility random-walk (SVRW) (``model.volatility.enabled``; requires NIW)
+    - Stochastic volatility variants (experimental; prior support depends on covariance model)
 
     Parameters
     ----------
@@ -63,6 +65,9 @@ def fit(
     a numerical initialization choice intended to avoid starting exactly at the truncation
     boundary.
     """
+    validate_prior_for_inference(prior)
+    if prior.family.lower() in {"ssvs", "dl"} and sampler.burn_in >= sampler.draws:
+        raise ValueError("shrinkage fits require retained draws; set burn_in < draws")
     dataset.require_finite_training_values()
 
     prior_family = prior.family.lower()
@@ -204,6 +209,7 @@ def forecast(
     If you call ``forecast(fit, horizons=[1, 3], ...)`` then ``result.mean[0]`` corresponds
     to horizon 1 and ``result.mean[2]`` corresponds to horizon 3.
     """
+    validate_fit_for_inference(fit)
     if rng is None:
         rng = np.random.default_rng()
 
