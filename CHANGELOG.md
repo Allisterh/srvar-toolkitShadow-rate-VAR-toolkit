@@ -38,6 +38,10 @@ version for these breaking changes; this does not assert stable model calibratio
 
 ### Fixed
 
+- Reject Minnesota metadata on custom shrinkage priors before it can select
+  an incompatible sampler. Custom NIW equation-wise priors remain supported.
+- Require SV innovation-variance draws for forecasts, while allowing IRF, FEVD
+  and historical decomposition from retained coefficients and volatility paths.
 - Retain variance state between homoskedastic coefficient updates; remove
   clipping of inverse-gamma residual draws and reject invalid numerical draws.
 - Include coupled likelihood terms in triangular SV coefficient Gibbs updates.

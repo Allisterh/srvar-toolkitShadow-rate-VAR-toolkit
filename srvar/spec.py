@@ -532,6 +532,10 @@ class PriorSpec:
     residual_prior: str | None = None
 
     def __post_init__(self) -> None:
+        if self.minnesota_canonical is not None and self.family.lower() != "niw":
+            raise ValueError(
+                "Minnesota metadata requires family='niw'; remove it for a shrinkage prior"
+            )
         families = {
             "niw_default": "niw",
             "minnesota_legacy": "niw",

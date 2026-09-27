@@ -67,7 +67,10 @@ The toolkit is designed for researchers and practitioners who need transparent, 
 Bayesian LASSO inference, non-zero-mean SSVS/DL and ELB historical decomposition
 raise explicit errors. Shrinkage inference requires retained parameter states;
 DL/SSVS results have no analytic NIW posterior fallback. Prior constructors and
-raw artefact inspection remain available for provenance.
+raw artefact inspection remain available for provenance. Minnesota equation-wise
+metadata requires an NIW family even for custom priors. SV structural analysis
+uses retained volatility paths; forecasting also requires volatility-innovation
+variance draws.
 
 Full DL hierarchy calibration and stochastic-volatility convergence remain
 experimental. Component tests and passing CI do not establish empirical validity.
@@ -104,10 +107,10 @@ publication or scientific approval. See [release scope](docs/user-guide/limitati
 |-----------|-------------|---------------|--------|
 | **Conjugate BVAR (NIW)** | Closed-form posterior updates and fast sampling for VAR coefficients/covariance | `PriorSpec.niw_default(...)` | Supported |
 | **Legacy Minnesota-style NIW shrinkage** | Historical Minnesota-style NIW construction (non-canonical; compatibility path) | `PriorSpec.niw_minnesota_legacy(...)` | Supported |
-| **Canonical Minnesota shrinkage** | Equation-wise Minnesota own-vs-cross shrinkage for homoskedastic and diagonal SV models | `PriorSpec.niw_minnesota_canonical(...)` or `prior.method: "minnesota_canonical"` | Supported (homo + diagonal SV) |
+| **Canonical Minnesota shrinkage** | Equation-wise Minnesota own-vs-cross shrinkage for homoskedastic, diagonal SV and triangular SV models | `PriorSpec.niw_minnesota_canonical(...)` or `prior.method: "minnesota_canonical"` | Supported (homo + diagonal/triangular SV) |
 | **Tempered Minnesota bridge** | Experimental geometric bridge between legacy and canonical Minnesota scaling | `PriorSpec.niw_minnesota_tempered(...)` or `prior.method: "minnesota_tempered"` | Experimental (diagonal SV only) |
 | **Variable Selection (SSVS)** | Spike-and-slab inclusion indicators for stochastic search | `PriorSpec.from_ssvs(...)` | Supported |
-| **Bayesian LASSO (BLASSO)** | Bayesian LASSO shrinkage prior for VAR coefficients (global or adaptive) | `PriorSpec.from_blasso(...)` | Supported |
+| **Bayesian LASSO (BLASSO)** | Bayesian LASSO shrinkage prior for VAR coefficients (global or adaptive) | `PriorSpec.from_blasso(...)` (provenance only) | Inference disabled |
 | **Shadow-Rate / ELB** | Latent shadow-rate sampling at the effective lower bound | `ModelSpec(elb=ElbSpec(...))` | Supported |
 | **Stochastic Volatility** | Diagonal SV with RW/AR(1) state dynamics; optional triangular covariance (fixed factor; generally time-varying correlations); optional factor SV (full time-varying covariance; v1: NIW+RW) | `ModelSpec(volatility=VolatilitySpec(...))` | Supported |
 | **Combined ELB + SV** | Joint shadow-rate and stochastic volatility model | `ModelSpec(elb=..., volatility=...)` | Supported |

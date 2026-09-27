@@ -387,7 +387,7 @@ def irf_cholesky(
     - `"one_sd"`: a 1-s.d. structural shock (`Var(u_j)=1`), impact matrix is the Cholesky factor.
     - `"unit"`: normalize each shock so its own-variable impact at horizon 0 equals 1.
     """
-    validate_fit_for_inference(fit)
+    validate_fit_for_inference(fit, require_volatility_innovations=False)
     if rng is None:
         rng = np.random.default_rng()
 
@@ -593,7 +593,7 @@ def irf_sign_restricted(
     - `"+"` / `"-"` require `sign * response >= sign_tol`.
     - `"0"` requires `abs(response) <= zero_tol` and can be infeasible in 1D.
     """
-    validate_fit_for_inference(fit)
+    validate_fit_for_inference(fit, require_volatility_innovations=False)
     if rng is None:
         rng = np.random.default_rng()
 

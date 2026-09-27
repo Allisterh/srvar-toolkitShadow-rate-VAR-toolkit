@@ -27,7 +27,12 @@ def validate_prior_for_inference(prior: PriorSpec) -> None:
         )
 
 
-def validate_fit_for_inference(fit: FitResult, *, require_covariance: bool = True) -> None:
+def validate_fit_for_inference(
+    fit: FitResult,
+    *,
+    require_covariance: bool = True,
+    require_volatility_innovations: bool = True,
+) -> None:
     """Validate loaded or constructed fits without substituting a different posterior."""
     validate_prior_for_inference(fit.prior)
     if fit.prior.family.lower() not in {"ssvs", "dl"}:
@@ -40,11 +45,11 @@ def validate_fit_for_inference(fit: FitResult, *, require_covariance: bool = Tru
     if not require_covariance:
         return
     vol = fit.model.volatility
-    states = (
-        (fit.h_draws, fit.sigma_eta2_draws)
-        if vol is not None and vol.enabled
-        else (fit.sigma_draws,)
-    )
+    states = [fit.sigma_draws]
+    if vol is not None and vol.enabled:
+        states = [fit.h_draws]
+        if require_volatility_innovations:
+            states.append(fit.sigma_eta2_draws)
     if any(state is None or state.ndim < 1 or state.shape[0] != beta.shape[0] for state in states):
         raise ValueError(
             "shrinkage inference requires aligned retained covariance states; refit the model"

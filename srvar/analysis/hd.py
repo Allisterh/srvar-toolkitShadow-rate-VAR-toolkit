@@ -88,7 +88,7 @@ def historical_decomposition_cholesky(
         raise ValueError(
             "ELB historical decomposition is disabled until posterior latent histories are paired"
         )
-    validate_fit_for_inference(fit)
+    validate_fit_for_inference(fit, require_volatility_innovations=False)
     if rng is None:
         rng = np.random.default_rng()
 

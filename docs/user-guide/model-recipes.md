@@ -26,11 +26,11 @@ Good starting points:
 - `config/minimal_config.yaml`
 - `config/demo_config.yaml`
 
-## 2) Legacy Minnesota-style shrinkage + stochastic volatility (linear SV benchmark)
+## 2) Canonical Minnesota shrinkage + stochastic volatility (linear SV benchmark)
 
 Use SV when forecast uncertainty changes over time.
 
-If you want equation-specific canonical Minnesota shrinkage instead, switch to:
+Select equation-specific canonical Minnesota shrinkage:
 
 ```yaml
 prior:
@@ -62,6 +62,9 @@ model:
     dynamics: "ar1"
     covariance: "triangular"
     q_prior_var: 1.0
+prior:
+  family: "niw"
+  method: "minnesota_canonical"
 ```
 
 Example:

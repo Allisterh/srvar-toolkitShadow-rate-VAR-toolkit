@@ -47,7 +47,7 @@ def test_nonzero_means_and_empty_retention_rejected(family):
     )
     assert valid.posterior is None
     assert valid.beta_draws.shape == (3, 3, 2)
-    assert forecast(valid, [1], draws=2).draws.shape == (2, 1, 2)
+    assert forecast(valid, [1], draws=2, rng=np.random.default_rng(92)).draws.shape == (2, 1, 2)
 
 
 OPERATIONS = [
@@ -69,6 +69,7 @@ def test_archived_or_constructed_fits_cannot_bypass_boundaries(operation, invali
         ModelSpec(p=1),
         PriorSpec.niw_default(k=3, n=2),
         SamplerConfig(draws=4, burn_in=0),
+        rng=np.random.default_rng(93),
     )
     if invalid == "blasso":
         bad = replace(base, prior=PriorSpec.from_blasso(k=3, n=2))
@@ -90,11 +91,17 @@ def test_archived_or_constructed_fits_cannot_bypass_boundaries(operation, invali
 
 
 def test_missing_covariance_never_substitutes_niw_but_reduced_form_needs_only_beta():
-    base = fit(dataset(), ModelSpec(p=1), prior("dl"), SamplerConfig(draws=4, burn_in=0))
+    base = fit(
+        dataset(),
+        ModelSpec(p=1),
+        prior("dl"),
+        SamplerConfig(draws=4, burn_in=0),
+        rng=np.random.default_rng(94),
+    )
     missing = replace(base, sigma_draws=None)
     with pytest.raises(ValueError, match="covariance states"):
         forecast(missing, [1], draws=2)
-    assert irf_reduced_form(missing, horizons=1).draws.shape[0] == 4
+    assert irf_reduced_form(missing, horizons=1, rng=np.random.default_rng(95)).draws.shape[0] == 4
 
 
 @pytest.mark.parametrize("use_latent", [None, True, False])
@@ -104,6 +111,7 @@ def test_elb_historical_decomposition_override_cannot_bypass_rejection(use_laten
         ModelSpec(p=1),
         PriorSpec.niw_default(k=3, n=2),
         SamplerConfig(draws=4, burn_in=0),
+        rng=np.random.default_rng(93),
     )
     elb = replace(
         base,
@@ -120,10 +128,11 @@ def test_conjugate_analytic_forecast_still_available():
         ModelSpec(p=1),
         PriorSpec.niw_default(k=3, n=2),
         SamplerConfig(draws=2, burn_in=2),
+        rng=np.random.default_rng(96),
     )
     assert result.beta_draws is None or len(result.beta_draws) == 0
     assert result.posterior is not None
-    assert forecast(result, [1], draws=2).draws.shape == (2, 1, 2)
+    assert forecast(result, [1], draws=2, rng=np.random.default_rng(97)).draws.shape == (2, 1, 2)
 
 
 def test_cli_runner_rejects_lasso_before_writing_results(tmp_path):
@@ -155,3 +164,70 @@ def test_cli_runner_rejects_lasso_before_writing_results(tmp_path):
     with pytest.raises(ValueError, match="Bayesian LASSO inference is disabled"):
         run_from_config(path, out_dir=tmp_path / "out")
     assert not (tmp_path / "out" / "fit.npz").exists()
+
+
+@pytest.mark.parametrize("family", ["ssvs", "dl", "blasso"])
+def test_custom_shrinkage_cannot_dispatch_through_minnesota_metadata(family):
+    import json
+
+    from srvar._prior_io import prior_from_json, prior_to_json
+
+    canonical = PriorSpec.niw_minnesota_canonical(y=dataset().values, p=1)
+    shrinkage = PriorSpec.from_blasso(k=3, n=2) if family == "blasso" else prior(family)
+    with pytest.raises(ValueError, match="Minnesota metadata requires family='niw'"):
+        replace(shrinkage, method="custom", minnesota_canonical=canonical.minnesota_canonical)
+    saved = json.loads(prior_to_json(shrinkage))
+    saved["method"] = "custom"
+    saved["minnesota_canonical"] = json.loads(prior_to_json(canonical))["minnesota_canonical"]
+    with pytest.raises(ValueError, match="invalid saved prior metadata"):
+        prior_from_json(json.dumps(saved))
+
+
+def test_custom_niw_metadata_preserves_equationwise_dispatch():
+    canonical = PriorSpec.niw_minnesota_canonical(y=dataset().values, p=1)
+    outputs = [
+        fit(
+            dataset(),
+            ModelSpec(p=1),
+            p,
+            SamplerConfig(draws=4, burn_in=0),
+            rng=np.random.default_rng(101),
+        )
+        for p in (canonical, replace(canonical, method="custom"))
+    ]
+    np.testing.assert_array_equal(outputs[0].beta_draws, outputs[1].beta_draws)
+    np.testing.assert_array_equal(outputs[0].sigma_draws, outputs[1].sigma_draws)
+
+
+def test_sv_analysis_needs_contemporaneous_covariance_but_forecasts_need_innovations():
+    from srvar.sv import VolatilitySpec
+
+    full = fit(
+        dataset(),
+        ModelSpec(p=1, volatility=VolatilitySpec()),
+        prior("dl"),
+        SamplerConfig(draws=4, burn_in=0),
+        rng=np.random.default_rng(102),
+    )
+    reduced = replace(full, sigma_eta2_draws=None)
+    operations = [
+        lambda f, rng: irf_cholesky(f, horizons=1, rng=rng),
+        lambda f, rng: irf_sign_restricted(f, horizons=1, restrictions={}, rng=rng),
+        lambda f, rng: fevd_cholesky(f, horizons=1, rng=rng),
+        lambda f, rng: historical_decomposition_cholesky(f, draws=4, rng=rng),
+    ]
+    for operation in operations:
+        expected = operation(full, np.random.default_rng(103))
+        actual = operation(reduced, np.random.default_rng(103))
+        np.testing.assert_array_equal(actual.mean, expected.mean)
+        missing_h = replace(reduced, h_draws=None)
+        with pytest.raises(ValueError, match="covariance states"):
+            operation(missing_h, np.random.default_rng(103))
+    for operation in (
+        lambda f: forecast(f, [1], draws=2, rng=np.random.default_rng(104)),
+        lambda f: conditional_forecast(
+            f, [1], constraints={"a": {1: 0}}, draws=2, rng=np.random.default_rng(104)
+        ),
+    ):
+        with pytest.raises(ValueError, match="covariance states"):
+            operation(reduced)
