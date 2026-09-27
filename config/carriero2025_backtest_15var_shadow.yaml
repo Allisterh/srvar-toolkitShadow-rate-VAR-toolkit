@@ -45,13 +45,13 @@ model:
 
 prior:
   family: "niw"
-  method: "minnesota_legacy"
+  method: "minnesota_canonical"  # Changed target; regenerate in a new output directory.
   minnesota:
     # Paper (Table 1 / text): θ1=0.22, θ2=0.52, θ3=100, θ4=2
     lambda1: 0.22
     lambda2: 0.52
     lambda3: 2.0
-    # Matches intercept variance ≈ θ3 * σ_n^2 when using matrix-normal scaling:
+    # Matches intercept variance ≈ θ3 * σ_n^2 under the canonical equation-specific prior:
     lambda4: 45.45454545
     # Prior mean on first own-lag (Table 1 "Minnesota prior" column)
     own_lag_means: [0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1]

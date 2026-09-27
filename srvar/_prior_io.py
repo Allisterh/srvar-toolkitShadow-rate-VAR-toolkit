@@ -98,6 +98,11 @@ def prior_from_json(text: str) -> PriorSpec:
         ):
             raise ValueError("legacy_default provenance conflicts with resolved IG parameters")
 
+        if raw["residual_prior"] == "empirical_bayes" and (
+            nu0 != 2.0 or not np.array_equal(raw["niw"].s0, np.diag(np.diag(raw["niw"].s0)))
+        ):
+            raise ValueError("empirical_bayes provenance conflicts with resolved IG parameters")
+
         for name, cls in (("dl", DLSpec), ("ssvs", SSVSSpec), ("blasso", BLassoSpec)):
             if family == name:
                 raw[name] = _hyperparameters(raw[name], cls)

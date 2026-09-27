@@ -494,6 +494,11 @@ def build_prior(cfg: dict[str, Any], *, dataset: Dataset, model: ModelSpec) -> P
         if method_l == "default":
             return PriorSpec.niw_default(k=k, n=dataset.N)
         if method_l in {"minnesota", "minnesota_legacy"}:
+            vol = model.volatility
+            if vol is not None and vol.enabled and vol.covariance == "triangular":
+                raise ConfigError(
+                    "triangular SV requires minnesota_canonical instead of minnesota_legacy"
+                )
             hyp = _get(prior_cfg, "minnesota", default={})
             if not isinstance(hyp, dict):
                 raise ConfigError("prior.minnesota must be a mapping")
@@ -512,10 +517,10 @@ def build_prior(cfg: dict[str, Any], *, dataset: Dataset, model: ModelSpec) -> P
             )
         if method_l == "minnesota_canonical":
             vol = model.volatility
-            if vol is not None and vol.enabled and vol.covariance in {"triangular", "factor"}:
+            if vol is not None and vol.enabled and vol.covariance == "factor":
                 raise ConfigError(
                     "prior.method='minnesota_canonical' currently supports only "
-                    "homoskedastic models and diagonal SV "
+                    "homoskedastic models, triangular and diagonal SV "
                     "(model.volatility.covariance: 'diagonal')"
                 )
             hyp = _get(prior_cfg, "minnesota", default={})
@@ -613,14 +618,23 @@ def build_prior(cfg: dict[str, Any], *, dataset: Dataset, model: ModelSpec) -> P
         if not isinstance(hyp, dict):
             raise ConfigError("prior.dl must be a mapping")
 
-        kwargs4: dict[str, Any] = {}
-        for name in ["abeta", "dl_scaler"]:
-            if name in hyp:
-                kwargs4[name] = hyp[name]
-
-        return PriorSpec.from_dl(
-            k=k, n=dataset.N, include_intercept=model.include_intercept, **kwargs4
-        )
+        allowed = {"abeta", "dl_scaler", "residual_prior", "nu0", "s0", "min_sigma2"}
+        if set(hyp) - allowed:
+            raise ConfigError("prior.dl contains unsupported keys")
+        kwargs4: dict[str, Any] = dict(hyp)
+        mode = kwargs4.setdefault("residual_prior", "empirical_bayes")
+        if mode == "empirical_bayes":
+            if "nu0" in hyp or "s0" in hyp:
+                raise ConfigError("empirical_bayes forbids prior.dl.nu0 and prior.dl.s0")
+            kwargs4.update(y=dataset.values, p=model.p)
+        elif "min_sigma2" in hyp:
+            raise ConfigError("prior.dl.min_sigma2 requires empirical_bayes mode")
+        try:
+            return PriorSpec.from_dl(
+                k=k, n=dataset.N, include_intercept=model.include_intercept, **kwargs4
+            )
+        except (ValueError, TypeError) as exc:
+            raise ConfigError(f"invalid prior.dl: {exc}") from exc
 
     raise ConfigError("prior.family must be one of: niw, ssvs, blasso, dl")
 

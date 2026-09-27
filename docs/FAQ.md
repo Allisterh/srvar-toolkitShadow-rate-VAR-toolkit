@@ -110,12 +110,12 @@ The run writes outputs to `output.out_dir` (or the `--out` override). Typical ar
 
 - `PriorSpec.niw_default(...)` is a simple conjugate baseline and is useful for smoke tests and sanity checks.
 - `PriorSpec.niw_minnesota_legacy(...)` provides the toolkit's current legacy Minnesota-style NIW shrinkage path and is often a better forecasting baseline than the plain default prior.
-- `PriorSpec.niw_minnesota_canonical(...)` provides equation-specific own-vs-cross Minnesota shrinkage for homoskedastic models and diagonal SV.
+- `PriorSpec.niw_minnesota_canonical(...)` provides equation-specific own-vs-cross Minnesota shrinkage for homoskedastic models and diagonal or triangular SV.
 - `PriorSpec.niw_minnesota_tempered(...)` is an experimental diagonal-SV-only bridge between the legacy and canonical variance maps.
 
 `PriorSpec.niw_minnesota(...)` is retained as a backward-compatible alias for
 `PriorSpec.niw_minnesota_legacy(...)`. Use the explicit canonical path only on its supported
-boundary; triangular and factor SV still require the legacy NIW route. Use the tempered path
+boundary; triangular SV rejects legacy Minnesota, while factor SV rejects canonical Minnesota. Use the tempered path
 only as an explicit sensitivity-analysis option; it does not replace or relabel canonical
 Minnesota.
 

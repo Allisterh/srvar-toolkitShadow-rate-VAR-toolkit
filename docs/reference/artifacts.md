@@ -19,8 +19,9 @@ Version-1 fit artifacts lack a resolved prior. `load_fit_npz` continues to read
 their raw draws with `prior=None`, while `load_run_dir` rejects reconstruction.
 Regenerate a run with verified prior parameters to create a version-2 artifact;
 do not relabel old arrays as a fit under new defaults. Constructor tags are
-declared provenance, not proof of scientific qualification. Existing DL defaults
-and numerical transitions are unchanged by the persistence format.
+declared provenance, not proof of scientific qualification. The persistence format itself does not determine prior defaults. The separate
+prior repair introduces empirical-Bayes DL mode; resolved parameters and its mode
+are saved without re-estimation. Archived `legacy_default` metadata remains readable.
 
 Markerless artifacts predating the safe version-1 format may contain pickle-backed arrays. The loaders reject them by
 default. If, and only if, you have verified an old artifact's source and integrity, use the

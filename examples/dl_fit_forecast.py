@@ -24,7 +24,14 @@ def main() -> None:
     # - abeta: Dirichlet concentration parameter
     # - dl_scaler: initialization scale for DL latent variables
     prior = PriorSpec.from_dl(
-        k=k, n=ds.N, include_intercept=model.include_intercept, abeta=0.5, dl_scaler=0.1
+        k=k,
+        n=ds.N,
+        residual_prior="empirical_bayes",
+        y=ds.values,
+        p=model.p,
+        include_intercept=model.include_intercept,
+        abeta=0.5,
+        dl_scaler=0.1,
     )
 
     sampler = SamplerConfig(draws=600, burn_in=200, thin=2)

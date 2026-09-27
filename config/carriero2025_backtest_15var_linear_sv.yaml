@@ -37,7 +37,7 @@ model:
 
 prior:
   family: "niw"
-  method: "minnesota_legacy"
+  method: "minnesota_canonical"  # Changed target; regenerate in a new output directory.
   minnesota:
     lambda1: 0.22
     lambda2: 0.52

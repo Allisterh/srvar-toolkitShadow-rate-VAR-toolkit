@@ -47,7 +47,9 @@ where the inverse-gamma density is proportional to $s_i^{-a_i-1}\exp(-b_i/s_i)$.
 
 The canonical Minnesota constructor supplies $IG(2,\widehat{\sigma}_i^2)$, where $\widehat{\sigma}_i^2$ is the equation's autoregressive residual-variance estimate from the supplied training data. Its prior mean is $\widehat{\sigma}_i^2$ and its prior variance is infinite. This is an empirical-Bayes, scale-adaptive choice; infinite variance alone does not establish weak informativeness or calibration.
 
-`PriorSpec.from_dl` currently defaults to `nu0=N+2` and `s0=I`, giving $IG(N+2,1)$ with mean $1/(N+1)$. That default depends on the number of variables and assumes a fixed residual scale. It is not recommended as an intended scientific prior merely because the coefficient/variance transition is correct. The Python constructor accepts explicit `nu0` and `s0` as IG shape and diagonal rates. Replacing the default is a separate model change; the existing component calibration uses explicit hyperparameters and does not qualify this default or the complete DL hierarchy.
+`PriorSpec.from_dl` requires a residual-prior mode. `empirical_bayes` supplies $IG(2,\widehat{\sigma}_i^2)$ using the existing univariate AR(p) residual estimator on the supplied training data. The denominator is $\max(T-p-(p+c),1)$, where $c$ indicates an intercept, and the positive variance floor defaults to $10^{-12}$. Each backtest origin estimates these scales once from its training window. Short or exactly fitted windows can be dominated by the floor; this is defined behaviour, not evidence of reliable scale estimation.
+
+`explicit` mode requires `nu0` and a positive diagonal `s0`, with no training inputs. The former implicit default $IG(N+2,1)$ can be reproduced deliberately using `nu0=N+2, s0=I`. Earlier default-configured results and new empirical-Bayes results have different targets and must not be pooled or relabelled. Fixed-hyperparameter component SBC does not qualify the plug-in scale-estimation procedure or the complete DL hierarchy; the empirical-Bayes procedure needs a separate frequentist coverage study.
 
 The coefficient conditional has precision $P_i=D_i+X'X/s_i$ and mean $P_i^{-1}(D_i m_i+X'y_i/s_i)$. The next variance is sampled from $IG(a_i+T_\mathrm{eff}/2,b_i+\lVert y_i-X\beta_i\rVert^2/2)$. Each iteration retains this variance for the next coefficient update. Resetting $s_i$ to a prior scale at every iteration does not target this joint posterior.
 
@@ -55,23 +57,25 @@ DL updates its shrinkage precisions between coefficient updates; canonical Minne
 
 ### Triangular SV coefficient sweep
 
-Triangular SV uses independent coefficient-column priors $\beta_i\sim N(m_i,V_0)$ and transformed residuals $e_t=Q(y_t-B'x_t)$. Each column affects every transformed equation whose corresponding entry in column $i$ of $Q$ is non-zero.
+Triangular SV uses independent coefficient-column priors $\beta_i\sim N(m_i,V_{0i})$ and transformed residuals $e_t=Q(y_t-B'x_t)$. Each column affects every transformed equation whose corresponding entry in column $i$ of $Q$ is non-zero.
 
 For column $i$, let $r_{tj}^{(-i)}=e_{tj}+Q_{ji}x_t'\beta_i$ remove its current contribution and let $w_{tj}=\exp(-h_{tj})$. Its Gaussian full conditional is
 
 $$
-P_i=V_0^{-1}+\sum_t x_tx_t'\sum_j w_{tj}Q_{ji}^2,
+P_i=V_{0i}^{-1}+\sum_t x_tx_t'\sum_j w_{tj}Q_{ji}^2,
 \qquad
-m_i^*=P_i^{-1}\left(V_0^{-1}m_i+\sum_t x_t\sum_j w_{tj}Q_{ji}r_{tj}^{(-i)}\right).
+m_i^*=P_i^{-1}\left(V_{0i}^{-1}m_i+\sum_t x_t\sum_j w_{tj}Q_{ji}r_{tj}^{(-i)}\right).
 $$
 
 The sampler updates columns in reverse order, updates the transformed residual after each draw, and retains the full coefficient matrix between sweeps. This is a block Gibbs transition; successive sweeps are not independent draws from the joint Gaussian conditional. Production solves use coefficient-sized matrices, while tests compare stationary moments against a dense joint Gaussian reference.
 
 #### Legacy Minnesota covariance limitation
 
-The triangular path uses the shared `prior.niw.v0` directly as $V_0$. Under the matrix-normal NIW model, the corresponding coefficient-column covariance is $\Sigma_{ii}V_0$; that dependent-variable scale is absent from the triangular path. The legacy constructor's lag variances are proportional to $1/\widehat{\sigma}_k^2$ with an averaged own/cross weight, and its intercept entry is $(\lambda_1\lambda_4)^2$. Used unscaled for triangular SV, these entries do not provide the intended equation-specific Minnesota ratios $\widehat{\sigma}_i^2/\widehat{\sigma}_k^2$. For example, $\lambda_1=0.2$ and $\lambda_4=25$ give an intercept variance of 25 in every equation, regardless of that equation's residual scale.
+The custom shared-covariance path uses `prior.niw.v0` directly as $V_0$. Under the matrix-normal NIW model, the corresponding coefficient-column covariance is $\Sigma_{ii}V_0$; that dependent-variable scale is absent from the triangular path. The legacy constructor's lag variances are proportional to $1/\widehat{\sigma}_k^2$ with an averaged own/cross weight, and its intercept entry is $(\lambda_1\lambda_4)^2$. Used unscaled for triangular SV, these entries do not provide the intended equation-specific Minnesota ratios $\widehat{\sigma}_i^2/\widehat{\sigma}_k^2$. For example, $\lambda_1=0.2$ and $\lambda_4=25$ give an intercept variance of 25 in every equation, regardless of that equation's residual scale.
 
-Consequently, `minnesota_legacy` with triangular SV must not be described as implementing the intended Minnesota prior. The sweep is correct for the supplied $N(m_i,V_0)$ column priors, but that fact does not endorse the constructor's covariance mapping. The container's `s0` and `nu0` do not parameterise the triangular coefficient or volatility target. Equation-specific canonical Minnesota precisions are not currently supported on this path; extending that support requires a separate implementation and scientific review. Existing triangular diagnostic runs also remain subject to their unresolved convergence failures.
+`minnesota_legacy` is therefore rejected for triangular SV, including its `minnesota` alias. Canonical Minnesota supplies $V_{0i}^{-1}=\operatorname{diag}(\texttt{inv_v0_vec}[iK:(i+1)K])$, with the same precision used in the prior linear term. This retains own-lag variances and the dependent/predictor residual-variance ratios already defined by the canonical constructor. The shared custom Gaussian path remains available. The container's `s0` and `nu0` do not parameterise the triangular coefficient or volatility target. The existing NIW mean calculation supplies an initial coefficient state only.
+
+Canonical support covers triangular RW and AR(1), including ELB coefficient updates. Factor SV, tempered triangular priors and triangular steady-state models remain unsupported. The new prior mapping requires separate scientific review; existing triangular diagnostic runs retain their unresolved convergence failures. No SV state, initial-state or innovation-variance transition is repaired by this coefficient-prior change.
 
 ### Forecasts from retained ELB states
 

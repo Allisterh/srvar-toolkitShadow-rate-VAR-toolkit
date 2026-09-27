@@ -23,6 +23,7 @@ CELLS = (
     ("independent_80_scale25", "independent", 80, 25.0),
     ("triangular_20_q08", "triangular", 20, 0.8),
     ("triangular_80_q16", "triangular", 80, 1.6),
+    ("triangular_eqwise_40_q08", "triangular_eqwise", 40, 0.8),
 )
 
 
@@ -33,10 +34,19 @@ def gaussian_reference(
     h: np.ndarray,
     m0: np.ndarray,
     v0: np.ndarray,
+    equation_covariances: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Assemble a small dense joint posterior, independently of the block sampler."""
     n = y.shape[1]
-    precision = np.kron(np.eye(n), np.linalg.inv(v0))
+    if equation_covariances is None:
+        precision = np.kron(np.eye(n), np.linalg.inv(v0))
+    else:
+        k = x.shape[1]
+        precision = np.zeros((k * n, k * n))
+        for i in range(n):
+            precision[i * k : (i + 1) * k, i * k : (i + 1) * k] = np.linalg.inv(
+                equation_covariances[i]
+            )
     rhs = precision @ m0.ravel(order="F")
     for xt, yt, ht in zip(x, y, h, strict=True):
         design = np.kron(np.eye(n), xt[None, :])
@@ -100,6 +110,16 @@ def run_replication(job: dict) -> dict:
     rates = np.array([2.0, 3.0]) * scale
     q = np.array([[1.0, scale], [0.0, 1.0]])
     h = np.column_stack([0.5 * np.sin(np.arange(nobs)), np.linspace(-0.5, 0.5, nobs)])
+    equation_covariances = (
+        np.array([np.diag([0.25, 2.0]), np.diag([3.0, 0.4])])
+        if family == "triangular_eqwise"
+        else None
+    )
+    inv_v0_vec = (
+        np.concatenate([1 / np.diag(cov) for cov in equation_covariances])
+        if equation_covariances is not None
+        else None
+    )
     if family == "independent":
         beta_true = m0 + dgp_rng.normal(size=(2, 2)) / np.sqrt(precision)
         variance_true = rates / dgp_rng.gamma(shape=3.0, size=2)
@@ -108,12 +128,20 @@ def run_replication(job: dict) -> dict:
         labels = ["beta00", "beta10", "beta01", "beta11", "variance0", "variance1"]
         reference_mean = None
     else:
-        beta_true = m0 + np.linalg.cholesky(v0) @ dgp_rng.normal(size=(2, 2))
+        if equation_covariances is None:
+            beta_true = m0 + np.linalg.cholesky(v0) @ dgp_rng.normal(size=(2, 2))
+        else:
+            beta_true = np.column_stack(
+                [
+                    dgp_rng.multivariate_normal(m0[:, i], cov)
+                    for i, cov in enumerate(equation_covariances)
+                ]
+            )
         shocks = dgp_rng.normal(size=(nobs, 2)) * np.exp(h / 2)
         y = x @ beta_true + np.linalg.solve(q, shocks.T).T
         truth = beta_true.ravel(order="F")
         labels = ["beta00", "beta10", "beta01", "beta11"]
-        reference_mean, _ = gaussian_reference(x, y, q, h, m0, v0)
+        reference_mean, _ = gaussian_reference(x, y, q, h, m0, v0, equation_covariances)
 
     samples = np.empty((job["chains"], job["draws"], len(truth)))
     for chain in range(job["chains"]):
@@ -141,6 +169,7 @@ def run_replication(job: dict) -> dict:
                     h=h,
                     m0=m0,
                     v0=v0,
+                    inv_v0_vec=inv_v0_vec,
                     beta=beta,
                     rng=rng,
                 )
@@ -262,9 +291,16 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=False)
     controls = vars(args).copy()
     controls["out"] = str(args.out)
-    (args.out / "manifest.json").write_text(
-        json.dumps({"controls": controls, **source_manifest()}, indent=2) + "\n", encoding="utf-8"
-    )
+    manifest = {"controls": controls, **source_manifest()}
+    root = Path(__file__).resolve().parents[1]
+    for relative, digest in manifest["sha256"].items():
+        source = (root / relative).read_bytes()
+        if hashlib.sha256(source).hexdigest() != digest:
+            raise RuntimeError("source changed while archiving study inputs")
+        target = args.out / "source" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source)
+    (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     cell_ids = (
         [index for index, cell in enumerate(CELLS) if cell[0] in args.cells]
         if args.cells

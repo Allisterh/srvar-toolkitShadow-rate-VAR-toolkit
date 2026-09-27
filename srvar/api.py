@@ -99,13 +99,10 @@ def fit(
             )
 
     if model.volatility is not None and model.volatility.enabled:
-        if prior_mode == "minnesota_canonical" and model.volatility.covariance in {
-            "triangular",
-            "factor",
-        }:
+        if prior_mode == "minnesota_canonical" and model.volatility.covariance == "factor":
             raise ValueError(
                 "minnesota_canonical currently supports only homoskedastic models "
-                "and diagonal stochastic volatility"
+                "and diagonal or triangular stochastic volatility"
             )
         if prior_family not in {"niw", "blasso", "dl"}:
             raise ValueError(

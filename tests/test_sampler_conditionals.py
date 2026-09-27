@@ -107,7 +107,7 @@ def test_every_independent_variance_caller_retains_state(monkeypatch, family, el
         steady_state=SteadyStateSpec(mu0=np.zeros(1), v0_mu=1.0) if steady else None,
     )
     prior = (
-        PriorSpec.from_dl(k=2, n=1)
+        PriorSpec.from_dl(k=2, n=1, residual_prior="explicit", nu0=3, s0=np.eye(1))
         if family == "dl"
         else PriorSpec.niw_minnesota_canonical(p=1, y=values, n=1)
     )

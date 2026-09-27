@@ -479,7 +479,7 @@ class PriorSpec:
         Declared constructor provenance. Directly built priors default to ``custom``;
         this label does not change the numerical target.
     residual_prior:
-        DL input provenance: ``legacy_default`` or ``explicit``. The resolved IG
+        DL input provenance: ``empirical_bayes``, ``explicit`` or archived ``legacy_default``. The resolved IG
         parameters remain in ``niw``. ``None`` means no mode was declared.
     """
 
@@ -512,7 +512,8 @@ class PriorSpec:
             elif self.minnesota_canonical is not None:
                 raise ValueError("prior method conflicts with Minnesota metadata")
         if self.residual_prior is not None and (
-            self.family.lower() != "dl" or self.residual_prior not in {"legacy_default", "explicit"}
+            self.family.lower() != "dl"
+            or self.residual_prior not in {"legacy_default", "explicit", "empirical_bayes"}
         ):
             raise ValueError("residual_prior must describe an existing DL residual prior")
 
@@ -693,7 +694,7 @@ class PriorSpec:
         This constructor preserves the standard own-vs-cross variance distinction by
         storing per-equation prior precisions rather than collapsing everything into a
         shared NIW row covariance. The resulting fit path is currently supported for
-        homoskedastic models and diagonal stochastic-volatility models.
+        homoskedastic models and diagonal or triangular stochastic-volatility models.
 
         Notes
         -----
@@ -990,6 +991,10 @@ class PriorSpec:
         *,
         k: int,
         n: int,
+        residual_prior: str | None = None,
+        y: np.ndarray | None = None,
+        p: int | None = None,
+        min_sigma2: float | None = None,
         include_intercept: bool = True,
         m0: np.ndarray | None = None,
         s0: np.ndarray | None = None,
@@ -997,42 +1002,95 @@ class PriorSpec:
         abeta: float = 0.5,
         dl_scaler: float = 0.1,
     ) -> PriorSpec:
-        if k < 1:
-            raise ValueError("k must be >= 1")
-        if n < 1:
-            raise ValueError("n must be >= 1")
+        """Construct DL shrinkage with an explicitly selected residual prior.
 
-        m0a: np.ndarray
-        if m0 is None:
-            m0a = np.zeros((k, n), dtype=float)
+        Parameters
+        ----------
+        residual_prior:
+            ``empirical_bayes`` uses IG(shape=2, rate=sigma2_hat_i), estimated
+            from training-only ``y`` by univariate AR(p) residual regressions.
+            ``explicit`` requires positive finite ``nu0`` (IG shape) and
+            diagonal positive ``s0`` (IG rates). Omitting the mode is an error.
+        y, p:
+            Training observations (T, N) and lag order, required only in
+            empirical-Bayes mode. K must equal N*p + include_intercept.
+        min_sigma2:
+            Positive finite residual-variance floor, default 1e-12 in
+            empirical-Bayes mode; forbidden in explicit mode. The estimator
+            divides residual sum of squares by max(T-p-p-include_intercept, 1).
+        k, n:
+            Coefficient and equation dimensions.
+        include_intercept:
+            Include an intercept in the auxiliary AR regressions.
+        m0:
+            Coefficient prior means (K, N), default zero. Non-zero means in
+            the full DL hierarchy remain outside scientific qualification.
+        s0, nu0:
+            Explicit IG rate matrix and shape; forbidden in empirical-Bayes mode.
+        abeta, dl_scaler:
+            DL concentration and latent-variable initialisation scale.
+
+        Notes
+        -----
+        The former implicit IG(N+2, 1) default has been removed. To reproduce
+        those hyperparameters deliberately, select explicit mode with nu0=N+2
+        and s0=I. SV residual variances follow their own state model; these IG
+        parameters describe the homoskedastic residual prior.
+        """
+        if residual_prior not in {"empirical_bayes", "explicit"}:
+            raise ValueError(
+                "select residual_prior='empirical_bayes' with y,p or 'explicit' with nu0,s0; "
+                "the implicit IG(N+2, 1) default was removed"
+            )
+        if k < 1 or n < 1:
+            raise ValueError("k and n must be >= 1")
+        m0a = np.zeros((k, n)) if m0 is None else np.asarray(m0, dtype=float)
+        if m0a.shape != (k, n) or not np.isfinite(m0a).all():
+            raise ValueError("m0 must be finite with shape (K, N)")
+        if residual_prior == "empirical_bayes":
+            if s0 is not None or nu0 is not None:
+                raise ValueError("empirical_bayes forbids explicit nu0 and s0")
+            if (
+                y is None
+                or p is None
+                or isinstance(p, bool)
+                or not isinstance(p, (int, np.integer))
+                or p < 1
+            ):
+                raise ValueError("empirical_bayes requires training y and integer p >= 1")
+            ya = np.asarray(y, dtype=float)
+            if ya.ndim != 2 or ya.shape[1] != n or ya.shape[0] <= p or not np.isfinite(ya).all():
+                raise ValueError("training y must be finite with shape (T, N) and T > p")
+            if k != n * p + int(include_intercept):
+                raise ValueError("k must equal n*p + include_intercept")
+            floor = 1e-12 if min_sigma2 is None else float(min_sigma2)
+            if not np.isfinite(floor) or floor <= 0:
+                raise ValueError("min_sigma2 must be finite and positive")
+            sigma2 = _estimate_minnesota_sigma2(
+                y=ya, p=p, include_intercept=include_intercept, min_sigma2=floor
+            )
+            s0a, nu0a = np.diag(sigma2), 2.0
         else:
-            m0a = np.asarray(m0, dtype=float)
-            if m0a.shape != (k, n):
-                raise ValueError("m0 must have shape (K, N)")
-
-        if s0 is None:
-            s0a = np.eye(n, dtype=float)
-        else:
-            s0a = np.asarray(s0, dtype=float)
-            if s0a.shape != (n, n):
-                raise ValueError("s0 must have shape (N, N)")
-
-        nu0a = float(n + 2) if nu0 is None else float(nu0)
-
-        niw = NIWPrior(
-            m0=m0a,
-            v0=np.eye(k, dtype=float),
-            s0=s0a,
-            nu0=nu0a,
-        )
-        spec = DLSpec(abeta=float(abeta), dl_scaler=float(dl_scaler))
-        _ = bool(include_intercept)
+            if y is not None or p is not None or min_sigma2 is not None:
+                raise ValueError("explicit residual prior forbids y, p and min_sigma2")
+            if s0 is None or nu0 is None:
+                raise ValueError("explicit residual prior requires both nu0 and s0")
+            s0a, nu0a = np.asarray(s0, dtype=float), float(nu0)
+        if (
+            s0a.shape != (n, n)
+            or not np.isfinite(s0a).all()
+            or np.any(np.diag(s0a) <= 0)
+            or not np.array_equal(s0a, np.diag(np.diag(s0a)))
+        ):
+            raise ValueError("s0 must be finite, diagonal and positive with shape (N, N)")
+        if not np.isfinite(nu0a) or nu0a <= 0:
+            raise ValueError("nu0 must be a finite positive IG shape")
         return PriorSpec(
             family="dl",
-            niw=niw,
-            dl=spec,
+            niw=NIWPrior(m0=m0a, v0=np.eye(k), s0=s0a, nu0=nu0a),
+            dl=DLSpec(abeta=float(abeta), dl_scaler=float(dl_scaler)),
             method="dl",
-            residual_prior="legacy_default" if s0 is None and nu0 is None else "explicit",
+            residual_prior=residual_prior,
         )
 
 

@@ -29,6 +29,16 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Changed
 
+- DL Python construction requires `residual_prior="empirical_bayes"` with training
+  data and lag order, or `"explicit"` with both IG shape and diagonal rates.
+  YAML defaults to training-window IG(2, AR residual variance). Earlier
+  default-configured DL runs used IG(N+2, 1); deliberately reproduce those values
+  through explicit mode or regenerate under the new prior in fresh directories.
+- Canonical Minnesota now supplies equation-specific coefficient precisions for
+  triangular RW/AR(1) SV, including ELB. Legacy Minnesota is rejected on this path.
+  Shared custom Gaussian priors remain supported; factor-SV and tempered-prior
+  boundaries are retained. Changed prior targets require separate scientific review.
+
 - Fit artifact writers now emit version 2; forecasts remain version 1.
   `load_run_dir` restores the saved prior instead of re-estimating it from config.
   Older files without a saved prior remain readable through `load_fit_npz`, but

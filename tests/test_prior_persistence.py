@@ -30,7 +30,7 @@ def _priors():
         "minnesota_tempered": PriorSpec.niw_minnesota_tempered(p=1, y=y, alpha=0.3),
         "ssvs": PriorSpec.from_ssvs(k=3, n=2, inclusion_prob=0.35),
         "blasso": PriorSpec.from_blasso(k=3, n=2, mode="adaptive"),
-        "dl": PriorSpec.from_dl(k=3, n=2),
+        "dl": PriorSpec.from_dl(k=3, n=2, residual_prior="explicit", nu0=4, s0=np.eye(2)),
     }
 
 
@@ -60,14 +60,16 @@ def _payload(path):
         return {key: archive[key] for key in archive.files}
 
 
-def test_constructor_methods_and_dl_inputs_are_recorded_without_changing_defaults():
+def test_constructor_methods_and_explicit_dl_inputs_are_recorded():
     for method, prior in _priors().items():
         assert prior.method == method
     default = _priors()["dl"]
-    assert default.residual_prior == "legacy_default"
+    assert default.residual_prior == "explicit"
     assert default.niw.nu0 == 4.0
     np.testing.assert_array_equal(default.niw.s0, np.eye(2))
-    explicit = PriorSpec.from_dl(k=3, n=2, nu0=3.0, s0=np.diag([2.0, 8.0]))
+    explicit = PriorSpec.from_dl(
+        k=3, n=2, residual_prior="explicit", nu0=3.0, s0=np.diag([2.0, 8.0])
+    )
     assert explicit.residual_prior == "explicit"
     alias = PriorSpec.niw_minnesota(p=1, y=np.random.default_rng(4).normal(size=(20, 2)))
     assert alias.method == "minnesota_legacy"
@@ -113,11 +115,21 @@ def test_run_loader_rejects_model_dimension_change(tmp_path):
         load_run_dir(tmp_path)
 
 
-@pytest.mark.parametrize("partial", [False, True])
-def test_run_loader_uses_saved_dl_prior_not_config_defaults(tmp_path, monkeypatch, partial):
+@pytest.mark.parametrize("empirical", [False, True])
+def test_run_loader_uses_saved_dl_prior_not_config_defaults(tmp_path, monkeypatch, empirical):
     import srvar.config as config
 
-    prior = PriorSpec.from_dl(k=3, n=2, nu0=9.0, **({} if partial else {"s0": np.diag([3, 11])}))
+    prior = (
+        PriorSpec.from_dl(
+            k=3,
+            n=2,
+            residual_prior="empirical_bayes",
+            y=np.random.default_rng(7).normal(size=(20, 2)),
+            p=1,
+        )
+        if empirical
+        else PriorSpec.from_dl(k=3, n=2, residual_prior="explicit", nu0=9.0, s0=np.diag([3, 11]))
+    )
     original = _fit(prior)
     save_fit_npz(tmp_path / "fit_result.npz", original)
     (tmp_path / "config.yml").write_text(
@@ -203,3 +215,25 @@ def test_provenance_tags_cannot_conflict_with_minnesota_metadata():
         replace(prior, method="minnesota_tempered")
     with pytest.raises(ValueError, match="method"):
         replace(prior, method="minnesota_legacy")
+
+
+def test_archived_legacy_dl_prior_remains_readable(tmp_path):
+    prior = replace(_priors()["dl"], residual_prior="legacy_default")
+    path = tmp_path / "fit.npz"
+    save_fit_npz(path, _fit(prior))
+    restored = load_fit_npz(path).prior
+    assert restored.residual_prior == "legacy_default"
+    np.testing.assert_array_equal(restored.niw.s0, np.eye(2))
+    assert restored.niw.nu0 == 4
+
+
+def test_saved_empirical_bayes_marker_requires_matching_shape(tmp_path):
+    path = tmp_path / "fit.npz"
+    save_fit_npz(path, _fit(_priors()["dl"]))
+    data = _payload(path)
+    prior = json.loads(data["prior_json"].item())
+    prior["residual_prior"] = "empirical_bayes"
+    data["prior_json"] = np.asarray(json.dumps(prior))
+    np.savez_compressed(path, **data)
+    with pytest.raises(ValueError, match="prior"):
+        load_fit_npz(path)

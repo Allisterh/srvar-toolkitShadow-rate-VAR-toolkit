@@ -38,8 +38,8 @@ prior:
   method: "minnesota_canonical"
 ```
 
-Use that canonical path only for homoskedastic models and diagonal SV. Triangular and factor SV
-should stay on `method: "minnesota_legacy"`.
+The canonical path supports homoskedastic, diagonal SV and triangular SV models.
+Triangular SV rejects `minnesota_legacy`; factor SV still rejects canonical Minnesota.
 
 For a bounded experimental bridge on diagonal SV, use:
 

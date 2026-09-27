@@ -57,7 +57,7 @@ def test_failures_remain_identifiable(monkeypatch):
     assert "LinAlgError" in result["error"]
 
 
-@pytest.mark.parametrize("cell_id", [0, 2])
+@pytest.mark.parametrize("cell_id", [0, 2, 4])
 def test_study_is_reproducible_and_keeps_truth_per_replication(cell_id):
     pytest.importorskip("arviz")
     job = dict(

@@ -189,7 +189,7 @@ prior:
 Notes:
 - `method: "minnesota"` remains supported as a backward-compatible alias for `method: "minnesota_legacy"`.
 - `method: "minnesota_legacy"` is the compatibility path and remains the default NIW shrinkage option.
-- With triangular SV, its shared `v0` is used without the dependent-variable covariance scaling present under NIW. This combination does not implement the intended equation-specific Minnesota variance ratios. The coefficient sweep targets the supplied independent column priors; the constructor mapping is a separate limitation. See {doc}`../theory/mcmc`.
+- Triangular SV rejects this legacy mapping and its `minnesota` alias. Use `minnesota_canonical` for equation-specific covariance scaling; see {doc}`../theory/mcmc`.
 
 ### NIW canonical Minnesota shrinkage
 
@@ -209,8 +209,8 @@ prior:
 
 Notes:
 - `method: "minnesota_canonical"` uses equation-specific own-vs-cross shrinkage.
-- It currently supports homoskedastic models and diagonal stochastic volatility only.
-- Triangular SV and factor SV currently reject this canonical option. The accepted legacy NIW configuration on the triangular path has the covariance-scaling limitation above; acceptance by configuration validation is not an endorsement of that prior mapping.
+- It supports homoskedastic models and diagonal or triangular stochastic volatility (RW/AR(1), including ELB).
+- Factor SV still rejects canonical Minnesota. Tempered priors and steady-state models remain unsupported for triangular SV.
 
 ### NIW tempered Minnesota bridge
 
@@ -273,9 +273,24 @@ prior:
   dl:
     abeta: 0.5                     # optional
     dl_scaler: 0.1                 # optional
+    residual_prior: empirical_bayes # default; uses this fit's training window
+    min_sigma2: 1.0e-12            # optional positive residual-variance floor
 ```
 
-For homoskedastic DL, this configuration uses the constructor's residual-variance default $IG(N+2,1)$, where $N$ is the number of variables. Its mean is $1/(N+1)$, so it depends on dimension and residual scale. This inherited default is not recommended as an intended scientific prior. The Python `PriorSpec.from_dl` interface accepts explicit `nu0` and `s0` as inverse-gamma shape and diagonal rates; the YAML DL block above does not expose them. See {doc}`../theory/mcmc` for the transition and qualification boundaries.
+For homoskedastic DL, empirical-Bayes mode uses $IG(2,\widehat{\sigma}_i^2)$ from univariate AR(p) residuals within each training window. The model supplies p and the intercept setting. No explicit shape/rate overrides are allowed in this mode. Unknown DL keys are rejected.
+
+To specify fixed IG shape and rates for a two-equation model:
+
+```yaml
+prior:
+  family: dl
+  dl:
+    residual_prior: explicit
+    nu0: 3.0
+    s0: [[2.0, 0.0], [0.0, 8.0]]
+```
+
+Explicit mode requires both parameters and rejects `min_sigma2`. The Python API requires a mode: use `residual_prior="empirical_bayes", y=training_values, p=p`, or `residual_prior="explicit", nu0=..., s0=...`. It no longer silently supplies $IG(N+2,1)$. To reproduce that old default deliberately, pass `nu0=N+2, s0=np.eye(N)` in explicit mode. Regenerate affected outputs in new directories. SV uses its own volatility state prior; these IG parameters describe homoskedastic residual variances. See {doc}`../theory/mcmc` for qualification limits.
 
 ## `sampler`
 
