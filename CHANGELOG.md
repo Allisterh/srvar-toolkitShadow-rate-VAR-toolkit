@@ -8,6 +8,10 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Added
 
+- Optional unfloored estimated-rate arms in the paired prior study, with explicit
+  failure records for invalid rates. Add a Gaussian unit-transformation study
+  with matched priors, initial variances, raw chains and numerical error checks.
+  Production priors and safeguards are unchanged.
 - Paired DL diagnostic study crossing empirical-Bayes/oracle residual-prior rates
   with DL/fixed Gaussian coefficient priors. Retains all raw chains, failed arms,
   paired MCSE and failure-inclusive coverage-difference bounds. Production

@@ -134,6 +134,51 @@ specified priors and DGPs; they neither prove the DL hierarchy's target nor
 identify a universal effect of shrinkage. Separate prior-floor estimation effects
 and changes of measurement units before changing production defaults.
 
+### Separate estimation from the residual-prior floor
+
+Add `--include-unfloored` to the paired command to fit six arms. The extra DL
+and Gaussian arms use the same AR estimator with its floor set to zero inside
+the study, then pass the rates through the explicit prior interface. This does
+not change production defaults. Zero or non-finite rates are failed arms;
+available raw estimates and exceptions are retained without replacements.
+
+The additional paired contrasts compare unfloored minus floored estimates and
+oracle minus unfloored estimates within each coefficient prior. They also report
+Gaussian minus DL under unfloored rates and the difference between the two
+unfloored-minus-floored effects. This separates floor and estimation changes on
+the declared DGPs. Use `--cells floor_stress` to target the active-floor case.
+
+### Equivalent Gaussian models in different units
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m scripts.check_gaussian_units \
+  --out .planning/private/gaussian-units --replications 3 \
+  --chains 4 --draws 1000 --warmup 500 --seed 20260928
+```
+
+This study rescales the same two-variable VAR(1) data by positive diagonal $S$.
+With $D=\operatorname{diag}(1,s_1,s_2)$, the corresponding design is $X^*=XD$,
+coefficients are $B^*=D^{-1}BS$, and residual variances are $v_j^*=s_j^2v_j$.
+It transforms Gaussian prior means and covariances as
+$m_j^*=s_jD^{-1}m_j$ and $V_j^*=s_j^2D^{-1}V_jD^{-1}$, and multiplies each
+IG rate by $s_j^2$ while preserving shape. This also transforms the production
+initial residual variances. The shared `v0` container is inert on this path;
+the actual transformed coefficient covariances use equation-wise precisions.
+
+The base prior uses independent N(0,1) coefficients and unfloored training-window
+rates at IG shape 2. Base units are compared with common factors 1e-7 and 1e7
+and mixed factors (1e-7,1e7). With the same per-chain seeds, every retained draw
+is converted back to base units. The declared tolerance is 1e-8 for
+`max(abs(back-base)/max(1,abs(base)))`, separately for each parameter. Arrays,
+priors, diagnostics, errors and unsuccessful fits are retained. A mismatch or
+exception makes the command exit non-zero after writing evidence.
+
+Raw and floored AR rate estimates are also recomputed from the scaled data and
+converted back, exposing the absolute floor's unit dependence separately from
+posterior sampling. Passing this finite grid checks numerical equivariance for
+the specified Gaussian target; it does not establish coverage or a transformation
+rule for the complete DL hierarchy.
+
 ## Isolated RW-SV investigation
 
 Check state-block mixing against a tractable posterior before attributing full-fit

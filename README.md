@@ -294,6 +294,11 @@ It retains raw chains, per-arm failures and paired uncertainty estimates to
 investigate coverage failures without changing production samplers. See the
 [study controls and interpretation](docs/theory/qualification.md#paired-residual-prior-and-shrinkage-controls).
 
+Optional unfloored-rate controls separate estimation from the residual-prior
+floor. A Gaussian unit study transforms data, coefficient priors, IG rates and
+initial variances together, then compares posterior draws in common units.
+Both are study tools; production defaults and safeguards remain unchanged.
+
 Reproducible component calibration, local benchmark comparisons and multi-chain diagnostic commands are documented in [Statistical qualification studies](docs/theory/qualification.md). These studies record source fingerprints and diagnostic failures; component checks do not certify every model family.
 
 ### Labeled outputs (`xarray` / ArviZ)

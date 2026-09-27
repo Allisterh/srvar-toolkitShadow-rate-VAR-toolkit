@@ -18,9 +18,16 @@ from scripts.study_evidence import archive_sources
 from srvar._prior_io import prior_to_json
 from srvar.api import fit
 from srvar.data.dataset import Dataset
-from srvar.spec import MinnesotaCanonicalSpec, ModelSpec, PriorSpec, SamplerConfig
+from srvar.spec import (
+    MinnesotaCanonicalSpec,
+    ModelSpec,
+    PriorSpec,
+    SamplerConfig,
+    _estimate_minnesota_sigma2,
+)
 
 ARMS = ("dl_eb", "dl_oracle", "gaussian_eb", "gaussian_oracle")
+UNFLOORED_ARMS = ("dl_unfloored", "gaussian_unfloored")
 LABELS = ("beta00", "beta10", "beta20", "beta01", "beta11", "beta21", "variance0", "variance1")
 CONTRASTS = {
     "oracle_minus_eb_dl": {"dl_oracle": 1, "dl_eb": -1},
@@ -29,17 +36,39 @@ CONTRASTS = {
     "gaussian_minus_dl_oracle": {"gaussian_oracle": 1, "dl_oracle": -1},
     "interaction": {"gaussian_oracle": 1, "gaussian_eb": -1, "dl_oracle": -1, "dl_eb": 1},
 }
+UNFLOORED_CONTRASTS = {
+    "unfloored_minus_eb_dl": {"dl_unfloored": 1, "dl_eb": -1},
+    "unfloored_minus_eb_gaussian": {"gaussian_unfloored": 1, "gaussian_eb": -1},
+    "oracle_minus_unfloored_dl": {"dl_oracle": 1, "dl_unfloored": -1},
+    "oracle_minus_unfloored_gaussian": {"gaussian_oracle": 1, "gaussian_unfloored": -1},
+    "gaussian_minus_dl_unfloored": {"gaussian_unfloored": 1, "dl_unfloored": -1},
+    "unfloored_interaction": {
+        "gaussian_unfloored": 1,
+        "gaussian_eb": -1,
+        "dl_unfloored": -1,
+        "dl_eb": 1,
+    },
+}
+
+
+def estimate_unfloored_rates(y: np.ndarray) -> np.ndarray:
+    """Return raw AR(1) residual estimates, including zero estimates for failure records."""
+    return _estimate_minnesota_sigma2(y=y, p=1, include_intercept=True, min_sigma2=0.0)
 
 
 def make_prior(y: np.ndarray, truth: np.ndarray, arm: str) -> PriorSpec:
     """Change only the declared prior factors; the Gaussian comparator is N(0,I)."""
-    if arm not in ARMS:
+    if arm not in ARMS + UNFLOORED_ARMS:
         raise ValueError(f"unknown study arm: {arm}")
-    prior = (
-        PriorSpec.from_dl(k=3, n=2, residual_prior="empirical_bayes", y=y, p=1)
-        if arm.endswith("_eb")
-        else PriorSpec.from_dl(k=3, n=2, residual_prior="explicit", nu0=2, s0=np.diag(truth[-2:]))
-    )
+    if arm.endswith("_eb"):
+        prior = PriorSpec.from_dl(k=3, n=2, residual_prior="empirical_bayes", y=y, p=1)
+    else:
+        rates = estimate_unfloored_rates(y) if arm.endswith("_unfloored") else truth[-2:]
+        if not np.isfinite(rates).all() or np.any(rates <= 0):
+            raise ValueError(
+                "unfloored/oracle IG rates must be finite and positive; no replacement is applied"
+            )
+        prior = PriorSpec.from_dl(k=3, n=2, residual_prior="explicit", nu0=2, s0=np.diag(rates))
     if arm.startswith("gaussian"):
         # Custom provenance: metadata routes to the existing independent-normal
         # kernel. No Minnesota constructor or scale-dependent variance map is used.
@@ -95,11 +124,14 @@ def run_dataset(job: dict) -> list[dict]:
     data_hash = hashlib.sha256(np.asarray(y, dtype="<f8").tobytes()).hexdigest()
     dataset = Dataset.from_arrays(values=y, variables=["a", "b"])
     records = []
-    for arm in ARMS:
+    arms = ARMS + UNFLOORED_ARMS if job.get("include_unfloored", False) else ARMS
+    for arm in arms:
         started = time.perf_counter()
         record = dict(cell=cell, replicate=job["replicate"], arm=arm, data_sha256=data_hash)
         samples = []
         try:
+            if arm.endswith("_unfloored"):
+                record["estimated_unfloored_rates"] = estimate_unfloored_rates(y).tolist()
             prior = make_prior(y, truth, arm)
             record["prior"] = json.loads(prior_to_json(prior))
             for stream in streams[1:]:
@@ -133,11 +165,13 @@ def run_dataset(job: dict) -> list[dict]:
     return records
 
 
-def arm_summaries(records: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def arm_summaries(
+    records: list[dict], *, arms: tuple[str, ...] = ARMS
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Reuse baseline marginal summaries; keep an explicit census of all-failed arms."""
     summaries, counts = [], []
     for cell in sorted({r["cell"] for r in records}):
-        for arm in ARMS:
+        for arm in arms:
             selected = [r for r in records if r["cell"] == cell and r["arm"] == arm]
             successful = sum(r["status"] == "ok" for r in selected)
             counts.append(
@@ -162,9 +196,11 @@ def arm_summaries(records: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
     )
 
 
-def paired_summaries(records: list[dict]) -> pd.DataFrame:
+def paired_summaries(records: list[dict], *, contrasts: dict | None = None) -> pd.DataFrame:
     """Dataset-paired contrasts, complete-case MCSE and failure-inclusive coverage bounds."""
     results = []
+    if contrasts is None:
+        contrasts = CONTRASTS
     for cell in sorted({r["cell"] for r in records}):
         selected = [r for r in records if r["cell"] == cell]
         replicates = sorted({r["replicate"] for r in selected})
@@ -173,7 +209,7 @@ def paired_summaries(records: list[dict]) -> pd.DataFrame:
             for r in selected
             if r["status"] == "ok"
         }
-        for contrast, weights in CONTRASTS.items():
+        for contrast, weights in contrasts.items():
             for label in LABELS:
                 values, lower, upper = [], [], []
                 for replicate in replicates:
@@ -239,6 +275,11 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=500)
     parser.add_argument("--seed", type=int, default=20260928)
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument(
+        "--include-unfloored",
+        action="store_true",
+        help="add estimated rates without a floor as two extra arms",
+    )
     args = parser.parse_args()
     if (
         args.replications < 2
@@ -253,10 +294,12 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=False)
     (args.out / "chains").mkdir()
     controls = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
+    arms = ARMS + UNFLOORED_ARMS if args.include_unfloored else ARMS
+    contrasts = CONTRASTS | UNFLOORED_CONTRASTS if args.include_unfloored else CONTRASTS
     manifest = dict(
         controls=controls,
-        arms=ARMS,
-        contrasts=CONTRASTS,
+        arms=arms,
+        contrasts=contrasts,
         coefficient_control="independent N(0,1) in the supplied measurement units",
         residual_shape=2,
         dgp_cells=baseline.CELLS,
@@ -285,10 +328,12 @@ def main() -> None:
                 f"datasets={i}/{len(jobs)} failed_arms={sum(r['status'] != 'ok' for r in records)}",
                 flush=True,
             )
-    summary, counts = arm_summaries(records)
+    summary, counts = arm_summaries(records, arms=arms)
     summary.to_csv(args.out / "summary.csv", index=False)
     counts.to_csv(args.out / "arm_counts.csv", index=False)
-    paired_summaries(records).to_csv(args.out / "paired_summary.csv", index=False)
+    paired_summaries(records, contrasts=contrasts).to_csv(
+        args.out / "paired_summary.csv", index=False
+    )
     failures = [r for r in records if r["status"] != "ok"]
     (args.out / "failures.json").write_text(json.dumps(failures, indent=2) + "\n")
     if failures:
